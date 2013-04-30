@@ -1,4 +1,4 @@
-module Scheme.Parser where
+module Scheme.Parser (readExpr) where
 
 import Text.ParserCombinators.Parsec
 import Control.Monad
@@ -156,8 +156,9 @@ parseExpr = parseSymbol
             <|> parseQuasiQuoted
             <|> parseUnQuote
             <|> parseList
+
 readExpr :: String -> ThrowsError SchemeValue
-readExpr input = case parse parseExpr "lisp" input of
+readExpr input = case parse parseExpr "scheme" input of
   Left  err -> throwError $ Parser err
   Right val -> return val
 

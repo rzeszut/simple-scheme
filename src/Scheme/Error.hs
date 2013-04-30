@@ -1,7 +1,10 @@
 module Scheme.Error ( SchemeError(..)
                     , ThrowsError(..)
+                    , IOThrowsError(..)
                     , trapError
                     , extractValue
+                    , liftThrows
+                    , runIOThrows
                     , throwError
                     , catchError
                     ) where
@@ -44,7 +47,16 @@ instance Error SchemeError where
 
 type ThrowsError = Either SchemeError
 
+type IOThrowsError = ErrorT SchemeError IO
+
 trapError action = catchError action (return . show)
 
 extractValue :: ThrowsError a -> a
 extractValue (Right x) = x
+
+liftThrows :: ThrowsError a -> IOThrowsError a
+liftThrows (Left  err) = throwError err
+liftThrows (Right val) = return val
+
+runIOThrows :: IOThrowsError String -> IO String
+runIOThrows action = runErrorT (trapError action) >>= return . extractValue

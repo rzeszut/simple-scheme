@@ -1,4 +1,4 @@
-module Scheme.Data where
+module Scheme.Data (SchemeValue(..)) where
 
 import Data.Array
 import Data.Ratio
