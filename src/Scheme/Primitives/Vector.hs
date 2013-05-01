@@ -1,4 +1,4 @@
-module Scheme.Primitives.Vector where
+module Scheme.Primitives.Vector (vectorp) where
 
 import Scheme.Data
 

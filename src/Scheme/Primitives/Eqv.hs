@@ -1,10 +1,10 @@
 module Scheme.Primitives.Eqv (eqv) where
 
 import Scheme.Data
-import Scheme.Error
+import Lang.Utils.Error
 
 -- TODO: vector support
-eqv :: [SchemeValue] -> ThrowsError SchemeValue
+eqv :: [SchemeValue] -> ThrowsSchemeError SchemeValue
 eqv [Nil, Nil]                          = return $ Boolean True
 eqv [(Symbol arg1), (Symbol arg2)]      = return . Boolean $ arg1 == arg2
 eqv [(Integer arg1), (Integer arg2)]    = return . Boolean $ arg1 == arg2

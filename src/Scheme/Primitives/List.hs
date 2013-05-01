@@ -1,20 +1,26 @@
-module Scheme.Primitives.List where
+module Scheme.Primitives.List ( pairp
+                              , cons
+                              , car
+                              , cdr
+                              , nullp
+                              , listp  
+                              ) where
 
 import Scheme.Data
-import Scheme.Error
+import Lang.Utils.Error
 
 pairp (Cons _ _) = Boolean True
 pairp _          = Boolean False
 
-cons :: [SchemeValue] -> ThrowsError SchemeValue
+cons :: [SchemeValue] -> ThrowsSchemeError SchemeValue
 cons [h, t] = return $ Cons h t
 cons args   = throwError $ NumArgs 2 args
 
-car :: SchemeValue -> ThrowsError SchemeValue
+car :: SchemeValue -> ThrowsSchemeError SchemeValue
 car (Cons h _) = return h
 car notPair    = throwError $ TypeMismatch "pair" notPair
 
-cdr :: SchemeValue -> ThrowsError SchemeValue
+cdr :: SchemeValue -> ThrowsSchemeError SchemeValue
 cdr (Cons _ t) = return t
 cdr notPair    = throwError $ TypeMismatch "pair" notPair
 

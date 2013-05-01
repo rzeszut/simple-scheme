@@ -9,7 +9,7 @@ import Data.Char (digitToInt)
 import Data.Ratio
 import Data.Complex
 import Scheme.Data
-import Scheme.Error
+import Lang.Utils.Error
 
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=>?@^_~"
@@ -157,8 +157,7 @@ parseExpr = parseSymbol
             <|> parseUnQuote
             <|> parseList
 
-readExpr :: String -> ThrowsError SchemeValue
+readExpr :: String -> ThrowsSchemeError SchemeValue
 readExpr input = case parse parseExpr "scheme" input of
   Left  err -> throwError $ Parser err
   Right val -> return val
-

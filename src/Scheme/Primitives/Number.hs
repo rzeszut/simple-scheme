@@ -1,4 +1,9 @@
-module Scheme.Primitives.Number where
+module Scheme.Primitives.Number ( numberp
+                                , complexp
+                                , realp
+                                , rationalp
+                                , integerp
+                                ) where
 
 import Scheme.Data
 

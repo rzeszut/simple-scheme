@@ -1,4 +1,6 @@
-module Scheme.Primitives.Boolean where
+module Scheme.Primitives.Boolean ( not'
+                                 , booleanp
+                                 ) where
 
 import Scheme.Data
 

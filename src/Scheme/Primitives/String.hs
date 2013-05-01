@@ -1,4 +1,4 @@
-module Scheme.Primitives.String where
+module Scheme.Primitives.String (stringp) where
 
 import Scheme.Data
 

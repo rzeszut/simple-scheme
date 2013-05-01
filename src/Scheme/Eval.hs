@@ -1,15 +1,31 @@
 module Scheme.Eval (eval) where
 
+import Control.Monad
+import Control.Monad.Trans (liftIO)
 import Scheme.Data
 import Scheme.Primitives
-import Scheme.Error
-import Scheme.Environment
+import Lang.Utils.Error
+import Lang.Utils.Environment (getVar, setVar, defineVar, bindVars)
 
 fromLispList :: SchemeValue -> [SchemeValue]
 fromLispList Nil        = []
 fromLispList (Cons h t) = h : (fromLispList t)
 
-eval :: Environment -> SchemeValue -> IOThrowsError SchemeValue
+toLispList :: [SchemeValue] -> SchemeValue
+toLispList []     = Nil
+toLispList (x:xs) = Cons x (toLispList xs)
+
+fromDottedLispList :: SchemeValue -> ([SchemeValue], SchemeValue)
+fromDottedLispList (Cons car cdr) = (car : rest, last)
+  where (rest, last) = fromDottedLispList cdr
+fromDottedLispList x              = ([], x)
+
+toDottedLispList :: [SchemeValue] -> SchemeValue -> SchemeValue
+toDottedLispList [] _        = Nil
+toDottedLispList [car] cdr   = Cons car cdr
+toDottedLispList (x:xs) last = Cons x (toDottedLispList xs last)
+
+eval :: SchemeEnvironment -> SchemeValue -> IOThrowsSchemeError SchemeValue
 eval _ Nil              = return Nil
 eval _ val@(Integer _)  = return val
 eval _ val@(Float _)    = return val
@@ -25,7 +41,7 @@ eval _ (Cons (Symbol "quote") (Cons val Nil))        = return val
 eval _ form@(Cons (Symbol "unquote") (Cons val Nil)) = throwError $ BadSpecialForm "expression invalid outside of quasiquote" form
 eval env (Cons (Symbol "quasiquote") (Cons val Nil)) = evalQuasiquoted val
   where
-    evalQuasiquoted :: SchemeValue -> IOThrowsError SchemeValue
+    evalQuasiquoted :: SchemeValue -> IOThrowsSchemeError SchemeValue
     evalQuasiquoted (Cons (Symbol "unquote") (Cons val Nil)) = eval env val
     evalQuasiquoted (Cons car cdr) =
       do head <- evalQuasiquoted car
@@ -55,7 +71,7 @@ eval env form@(Cons (Symbol "cond") clauses) = evalClauses clauses
                                                      else evalClauses rest
     evalClauses form = throwError $ BadSpecialForm "ill-formed cond expression: " form
 
-    isTrue :: SchemeValue -> IOThrowsError Bool
+    isTrue :: SchemeValue -> IOThrowsSchemeError Bool
     isTrue cond = do
       b <- eval env cond
       case b of
@@ -72,14 +88,43 @@ eval env (Cons (Symbol "set!") (Cons (Symbol var) (Cons form Nil))) =
 eval env (Cons (Symbol "define") (Cons (Symbol var) (Cons form Nil))) =
   eval env form >>= defineVar env var
 
+eval env (Cons (Symbol "define") (Cons (Cons (Symbol var) paramsList) body)) =
+  makeFunction vararg env params body >>= defineVar env var
+  where
+    (params, v) = fromDottedLispList paramsList
+    vararg      = case v of
+      Nil -> Nothing
+      x   -> Just $ show x
+
+eval env (Cons (Symbol "lambda") (Cons paramsList body)) = 
+  makeFunction vararg env params body
+  where
+    (params, v) = fromDottedLispList paramsList
+    vararg      = case v of
+      Nil -> Nothing
+      x   -> Just $ show x
+
 -- function application
-eval env (Cons (Symbol func) args) = mapM (eval env) (fromLispList args)
-                                     >>= liftThrows . apply func
+eval env (Cons (Symbol function) args) = do
+  fun     <- getVar env function
+  argVals <- mapM (eval env) (fromLispList args)
+  apply fun argVals
 
 eval env badForm =
   throwError $ BadSpecialForm "Unrecognized special form" badForm
 
-apply :: String -> [SchemeValue] -> ThrowsError SchemeValue
-apply func args = maybe (throwError $ NotFunction "Unrecognized primitive function" func)
-                  ($ args)
-                  $ lookup func primitives
+apply :: SchemeValue -> [SchemeValue] -> IOThrowsSchemeError SchemeValue
+apply (NativeFunction fun) args = liftThrows $ fun args
+apply (Function params vararg body closure) args =
+  if num params /= num args && vararg == Nothing
+    then throwError $ NumArgs (num params) args
+    else (liftIO $ bindVars closure $ zip params args) >>= bindVarArg vararg >>= evalBody
+  where
+    remainingArgs      = drop (length params) args
+    num                = toInteger . length
+    evalBody env       = liftM last $ mapM (eval env) (fromLispList body)
+    bindVarArg arg env = case arg of
+      Nothing      -> return env
+      Just argName -> liftIO $ bindVars env [(argName, toLispList remainingArgs)]
+
+makeFunction varargs env params body = return $ Function (map show params) varargs body env
