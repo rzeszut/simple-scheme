@@ -75,6 +75,27 @@
           (car alist)
           (assoc obj (cdr alist)))))
 
+'characters
+(define (char-ci=? char1 char2)
+  (char=? (char-downcase char1)
+          (char-downcase char2)))
+
+(define (char-ci<? char1 char2)
+  (char<? (char-downcase char1)
+          (char-downcase char2)))
+
+(define (char-ci>? char1 char2)
+  (char>? (char-downcase char1)
+          (char-downcase char2)))
+
+(define (char-ci<=? char1 char2)
+  (char<=? (char-downcase char1)
+          (char-downcase char2)))
+
+(define (char-ci>=? char1 char2)
+  (char>=? (char-downcase char1)
+          (char-downcase char2)))
+
 'numbers
 (define (zero? num) (= 0 num))
 
@@ -97,5 +118,11 @@
   (if (null? list)
       acc
       (fun (car list) (foldr fun acc (cdr list)))))
+
+(define (for-each fun list)
+  (if (null? list)
+      '()
+      (begin (fun (car list))
+             (for-each fun (cdr list)))))
 
 'stdlib

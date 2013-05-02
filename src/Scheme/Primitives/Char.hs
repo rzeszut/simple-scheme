@@ -1,37 +1,42 @@
 module Scheme.Primitives.Char (charPrimitives) where
 
-import Data.Char (toLower, toUpper, chr, ord)
+import Data.Char
 import Lang.Utils.Error
 import Scheme.Data
 import Scheme.Primitives.Common
 
 charPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
-charPrimitives = [ ("char?",         unaryOp charp)
-                 , ("char=?",        charBoolBinop (==))
-                 , ("char<?",        charBoolBinop (<))
-                 , ("char>?",        charBoolBinop (>))
-                 , ("char<=?",       charBoolBinop (<=))
-                 , ("char>=?",       charBoolBinop (>=))
-                 , ("char->integer", unaryThrowingOp char2integer)
-                 , ("integer->char", unaryThrowingOp integer2char)
-                 , ("char-upcase",   unaryThrowingOp charUpcase)
-                 , ("char-downcase", unaryThrowingOp charDowncase)
+charPrimitives = [ ("char?",            unaryFunction charp)
+                 , ("char=?",           charBoolBinop (==))
+                 , ("char<?",           charBoolBinop (<))
+                 , ("char>?",           charBoolBinop (>))
+                 , ("char<=?",          charBoolBinop (<=))
+                 , ("char>=?",          charBoolBinop (>=))
+                 , ("char-alphabetic?", charAlphap)
+                 , ("char-numeric?",    charNump)
+                 , ("char-whitespace?", charSpacep)
+                 , ("char-upper-case?", charUpperp)
+                 , ("char-lower-case?", charLowerp)
+                 , ("char->integer",    char2integer)
+                 , ("integer->char",    integer2char)
+                 , ("char-upcase",      charUpcase)
+                 , ("char-downcase",    charDowncase)
                  ]
-
--- TODO: errors
 
 charp (Char _) = Boolean True
 charp _        = Boolean False
 
-char2integer (Char c) = return . Integer . toInteger $ ord c
+charAlphap = charUnary isAlpha (return . Boolean)
+charNump   = charUnary isDigit (return . Boolean)
+charSpacep = charUnary isSpace (return . Boolean)
+charUpperp = charUnary isUpper (return . Boolean)
+charLowerp = charUnary isLower (return . Boolean)
 
-integer2char (Integer i) = return . Char . chr $ fromInteger i
+char2integer = charUnary (toInteger . ord) (return . Integer)
+integer2char = makeUnaryFunction unpackInteger (chr . fromInteger) (return . Char)
 
-charUpcase (Char c) = return . Char $ toUpper c
+charUpcase   = charUnary toUpper (return . Char)
+charDowncase = charUnary toLower (return . Char)
 
-charDowncase (Char c) = return . Char $ toLower c
-
-charBoolBinop = boolBinop unpacker
-  where
-    unpacker (Char c) = return c
-    unpacker notChar  = throwError $ TypeMismatch "char" notChar
+charBoolBinop = makeBinaryBoolFunction unpackChar
+charUnary     = makeUnaryFunction unpackChar

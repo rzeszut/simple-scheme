@@ -7,8 +7,8 @@ import Scheme.Primitives.Common
 
 controlPrimitives :: [(String, [SchemeValue] -> IOThrowsSchemeError SchemeValue)]
 controlPrimitives = [ ("apply",      applyProc)
-                    , ("error",      \x -> liftThrows $ unaryThrowingOp errorProc x)
-                    , ("procedure?", \x -> liftThrows $ unaryOp procedurep x)
+                    , ("error",      \x -> liftThrows $ unaryThrowingFunction errorProc x)
+                    , ("procedure?", \x -> liftThrows $ unaryFunction procedurep x)
                     ]
 
 applyProc :: [SchemeValue] -> IOThrowsSchemeError SchemeValue

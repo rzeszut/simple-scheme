@@ -5,11 +5,11 @@ import Scheme.Data
 import Scheme.Primitives.Common
 
 numberPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
-numberPrimitives = [ ("number?",   unaryOp numberp)
-                   , ("complex?",  unaryOp complexp)
-                   , ("real?",     unaryOp realp)
-                   , ("rational?", unaryOp rationalp)
-                   , ("integer?",  unaryOp integerp)
+numberPrimitives = [ ("number?",   unaryFunction numberp)
+                   , ("complex?",  unaryFunction complexp)
+                   , ("real?",     unaryFunction realp)
+                   , ("rational?", unaryFunction rationalp)
+                   , ("integer?",  unaryFunction integerp)
                    , ("+",         numericBinop (+))
                    , ("-",         numericBinop (-))
                    , ("*",         numericBinop (*))
@@ -54,9 +54,11 @@ unpackNum :: SchemeValue -> ThrowsSchemeError Integer
 unpackNum (Integer i) = return i
 unpackNum notNum      = throwError $ TypeMismatch "number" notNum
 
-numericBinop :: (Integer -> Integer -> Integer) -> [SchemeValue] -> ThrowsSchemeError SchemeValue
+numericBinop :: (Integer -> Integer -> Integer)
+                -> [SchemeValue]
+                -> ThrowsSchemeError SchemeValue
 numericBinop _  singleVal@[_] = throwError $ NumArgs 2 singleVal
 numericBinop op params        = mapM unpackNum params
                                 >>= return . Integer . foldl1 op
 
-numBoolBinop     = boolBinop unpackNum
+numBoolBinop     = makeBinaryBoolFunction unpackNum

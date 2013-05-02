@@ -5,8 +5,8 @@ import Scheme.Data
 import Scheme.Primitives.Common
 
 booleanPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
-booleanPrimitives = [ ("boolean?", unaryOp booleanp)
-                    , ("not",      unaryOp notProc)
+booleanPrimitives = [ ("boolean?", unaryFunction booleanp)
+                    , ("not",      unaryFunction notProc)
                     , ("&&",       booleanBoolBinop (&&))
                     , ("||",       booleanBoolBinop (||))
                     ]
@@ -19,7 +19,4 @@ booleanp (Boolean _) = Boolean True
 booleanp _           = Boolean False
 
 -- TODO: will this work with and and or?
-booleanBoolBinop = boolBinop unpacker
-  where
-    unpacker (Boolean b) = return b
-    unpacker notBool     = throwError $ TypeMismatch "boolean" notBool
+booleanBoolBinop = makeBinaryBoolFunction unpackBoolean

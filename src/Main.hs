@@ -1,8 +1,5 @@
-import System.Environment
-
-import Control.Monad
-import Scheme.REPL
-import System.IO
+import System.Environment (getArgs)
+import Scheme.REPL (runFile, runRepl)
 
 main :: IO ()
 main = do args <- getArgs

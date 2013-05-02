@@ -41,7 +41,7 @@ data SchemeValue = Nil
                  | Function { params  :: [String]
                             , vararg  :: Maybe String
                             , body    :: SchemeValue
-                            , closure :: Environment SchemeValue
+                            , closure :: SchemeEnvironment
                             }
                  | Port Handle
 

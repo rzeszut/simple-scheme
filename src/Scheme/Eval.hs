@@ -92,7 +92,7 @@ eval env (Cons (Symbol "load") (Cons (String filename) Nil)) =
   load filename >>= liftM last . mapM (eval env)
 
 -- begin
-eval env (Cons (Symbol "begin") (Cons body Nil)) =
+eval env (Cons (Symbol "begin") body) =
   liftM last $ mapM (eval env) (fromLispList body)
 
 -- function application
@@ -106,6 +106,7 @@ eval env badForm =
   
 makeFunction varargs env params body = return $ Function (map show params) varargs body env
 
+-- TODO: add environment for native functions
 apply :: SchemeValue -> [SchemeValue] -> IOThrowsSchemeError SchemeValue
 apply (NativeFunction fun) args   = liftThrows $ fun args
 apply (IONativeFunction fun) args = fun args

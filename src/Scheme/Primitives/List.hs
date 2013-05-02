@@ -5,28 +5,21 @@ import Scheme.Data
 import Scheme.Primitives.Common
 
 listPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
-listPrimitives = [ ("pair?",  unaryOp pairp)
+listPrimitives = [ ("pair?",  unaryFunction pairp)
                  , ("cons",   cons)
-                 , ("car",    unaryThrowingOp car)
-                 , ("cdr",    unaryThrowingOp cdr)
-                 , ("null?",  unaryOp nullp)
-                 , ("list?",  unaryOp listp)
+                 , ("car",    car)
+                 , ("cdr",    cdr)
+                 , ("null?",  unaryFunction nullp)
+                 , ("list?",  unaryFunction listp)
                  ]
 
 pairp (Cons _ _) = Boolean True
 pairp _          = Boolean False
 
-cons :: [SchemeValue] -> ThrowsSchemeError SchemeValue
-cons [h, t] = return $ Cons h t
-cons args   = throwError $ NumArgs 2 args
+cons = makeBinaryFunction return return Cons return
 
-car :: SchemeValue -> ThrowsSchemeError SchemeValue
-car (Cons h _) = return h
-car notPair    = throwError $ TypeMismatch "pair" notPair
-
-cdr :: SchemeValue -> ThrowsSchemeError SchemeValue
-cdr (Cons _ t) = return t
-cdr notPair    = throwError $ TypeMismatch "pair" notPair
+car = makeUnaryFunction unpackPair (\(h, _) -> h) return
+cdr = makeUnaryFunction unpackPair (\(_, t) -> t) return
 
 -- set-car!, set-cdr!
 
