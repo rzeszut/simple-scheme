@@ -1,10 +1,14 @@
-module Scheme.Primitives.Symbol ( symbolp
-                                , symbol2string
-                                , string2symbol
-                                ) where
+module Scheme.Primitives.Symbol (symbolPrimitives) where
 
-import Scheme.Data
 import Lang.Utils.Error
+import Scheme.Data
+import Scheme.Primitives.Common
+
+symbolPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
+symbolPrimitives = [ ("symbol?",        unaryOp symbolp)
+                   , ("symbol->string", unaryThrowingOp symbol2string)
+                   , ("string->symbol", unaryThrowingOp string2symbol)
+                   ]
 
 symbolp (Symbol _) = Boolean True
 symbolp _          = Boolean False

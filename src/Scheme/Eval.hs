@@ -1,29 +1,11 @@
-module Scheme.Eval (eval) where
+module Scheme.Eval (eval, apply) where
 
-import Control.Monad
+import Control.Monad (liftM, mapM)
 import Control.Monad.Trans (liftIO)
 import Scheme.Data
-import Scheme.Primitives
+import Scheme.Parser (load)
 import Lang.Utils.Error
 import Lang.Utils.Environment (getVar, setVar, defineVar, bindVars)
-
-fromLispList :: SchemeValue -> [SchemeValue]
-fromLispList Nil        = []
-fromLispList (Cons h t) = h : (fromLispList t)
-
-toLispList :: [SchemeValue] -> SchemeValue
-toLispList []     = Nil
-toLispList (x:xs) = Cons x (toLispList xs)
-
-fromDottedLispList :: SchemeValue -> ([SchemeValue], SchemeValue)
-fromDottedLispList (Cons car cdr) = (car : rest, last)
-  where (rest, last) = fromDottedLispList cdr
-fromDottedLispList x              = ([], x)
-
-toDottedLispList :: [SchemeValue] -> SchemeValue -> SchemeValue
-toDottedLispList [] _        = Nil
-toDottedLispList [car] cdr   = Cons car cdr
-toDottedLispList (x:xs) last = Cons x (toDottedLispList xs last)
 
 eval :: SchemeEnvironment -> SchemeValue -> IOThrowsSchemeError SchemeValue
 eval _ Nil              = return Nil
@@ -96,6 +78,7 @@ eval env (Cons (Symbol "define") (Cons (Cons (Symbol var) paramsList) body)) =
       Nil -> Nothing
       x   -> Just $ show x
 
+-- lambda
 eval env (Cons (Symbol "lambda") (Cons paramsList body)) = 
   makeFunction vararg env params body
   where
@@ -103,6 +86,14 @@ eval env (Cons (Symbol "lambda") (Cons paramsList body)) =
     vararg      = case v of
       Nil -> Nothing
       x   -> Just $ show x
+
+-- load
+eval env (Cons (Symbol "load") (Cons (String filename) Nil)) =
+  load filename >>= liftM last . mapM (eval env)
+
+-- begin
+eval env (Cons (Symbol "begin") (Cons body Nil)) =
+  liftM last $ mapM (eval env) (fromLispList body)
 
 -- function application
 eval env (Cons (Symbol function) args) = do
@@ -112,9 +103,12 @@ eval env (Cons (Symbol function) args) = do
 
 eval env badForm =
   throwError $ BadSpecialForm "Unrecognized special form" badForm
+  
+makeFunction varargs env params body = return $ Function (map show params) varargs body env
 
 apply :: SchemeValue -> [SchemeValue] -> IOThrowsSchemeError SchemeValue
-apply (NativeFunction fun) args = liftThrows $ fun args
+apply (NativeFunction fun) args   = liftThrows $ fun args
+apply (IONativeFunction fun) args = fun args
 apply (Function params vararg body closure) args =
   if num params /= num args && vararg == Nothing
     then throwError $ NumArgs (num params) args
@@ -126,5 +120,4 @@ apply (Function params vararg body closure) args =
     bindVarArg arg env = case arg of
       Nothing      -> return env
       Just argName -> liftIO $ bindVars env [(argName, toLispList remainingArgs)]
-
-makeFunction varargs env params body = return $ Function (map show params) varargs body env
+apply fun _ = throwError $ NotFunction "value is not a function" fun

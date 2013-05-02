@@ -1,13 +1,17 @@
-module Scheme.Primitives.List ( pairp
-                              , cons
-                              , car
-                              , cdr
-                              , nullp
-                              , listp  
-                              ) where
+module Scheme.Primitives.List (listPrimitives) where
 
-import Scheme.Data
 import Lang.Utils.Error
+import Scheme.Data
+import Scheme.Primitives.Common
+
+listPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
+listPrimitives = [ ("pair?",  unaryOp pairp)
+                 , ("cons",   cons)
+                 , ("car",    unaryThrowingOp car)
+                 , ("cdr",    unaryThrowingOp cdr)
+                 , ("null?",  unaryOp nullp)
+                 , ("list?",  unaryOp listp)
+                 ]
 
 pairp (Cons _ _) = Boolean True
 pairp _          = Boolean False
@@ -23,6 +27,8 @@ car notPair    = throwError $ TypeMismatch "pair" notPair
 cdr :: SchemeValue -> ThrowsSchemeError SchemeValue
 cdr (Cons _ t) = return t
 cdr notPair    = throwError $ TypeMismatch "pair" notPair
+
+-- set-car!, set-cdr!
 
 nullp Nil = Boolean True
 nullp _   = Boolean False

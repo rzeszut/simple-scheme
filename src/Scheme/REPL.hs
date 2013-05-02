@@ -1,4 +1,4 @@
-module Scheme.REPL ( runOne
+module Scheme.REPL ( runFile
                    , runRepl
                    ) where
 
@@ -9,7 +9,7 @@ import Scheme.Parser
 import Scheme.Primitives
 import System.IO
 import Lang.Utils.Error (runIOThrows, liftThrows)
-import Lang.Utils.Environment (nullEnvironment)
+import Lang.Utils.Environment (bindVars)
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
@@ -30,8 +30,11 @@ until_ pred prompt action = do
     then return ()
     else action result >> until_ pred prompt action
 
-runOne :: String -> IO ()
-runOne expr = primitiveBindings >>= flip evalAndPrint expr
+runFile :: [String] -> IO ()
+runFile args = do
+  env <- primitiveBindings >>= flip bindVars [("args", toLispList $ map String $ drop 1 args)]
+  (runIOThrows $ liftM show $ eval env (Cons (Symbol "load") (Cons (String $ args !! 0) Nil)))
+    >>= hPutStrLn stderr
 
 runRepl :: IO ()
 runRepl = primitiveBindings >>= until_ (== ":q") (readPrompt "scheme> ") . evalAndPrint

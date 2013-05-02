@@ -1,6 +1,9 @@
-module Scheme.Parser (readExpr) where
+module Scheme.Parser ( readExpr
+                     , readExprList
+                     , load
+                     ) where
 
-import Text.ParserCombinators.Parsec
+import Text.Parsec
 import Control.Monad
 import Control.Monad.Error
 import Numeric
@@ -10,6 +13,10 @@ import Data.Ratio
 import Data.Complex
 import Scheme.Data
 import Lang.Utils.Error
+import Control.Monad.Trans (liftIO)
+import System.IO
+
+type Parser = Parsec String ()
 
 symbol :: Parser Char
 symbol = oneOf "!$%&|*+-/:<=>?@^_~"
@@ -119,10 +126,6 @@ parseUnQuote = do
   x <- parseExpr
   return $ toLispList [Symbol "unquote", x]
 
-toLispList :: [SchemeValue] -> SchemeValue
-toLispList []     = Nil
-toLispList (x:xs) = Cons x (toLispList xs)
-
 parseList :: Parser SchemeValue
 parseList = do
   char '(' >> spaces
@@ -157,7 +160,16 @@ parseExpr = parseSymbol
             <|> parseUnQuote
             <|> parseList
 
-readExpr :: String -> ThrowsSchemeError SchemeValue
-readExpr input = case parse parseExpr "scheme" input of
+readOrThrow :: Parser a -> String -> ThrowsError b a
+readOrThrow parser input = case parse parser "scheme" input of
   Left  err -> throwError $ Parser err
   Right val -> return val
+
+readExpr :: String -> ThrowsSchemeError SchemeValue
+readExpr = readOrThrow parseExpr
+
+readExprList :: String -> ThrowsSchemeError [SchemeValue]
+readExprList = readOrThrow (endBy parseExpr spaces)
+
+load :: String -> IOThrowsSchemeError [SchemeValue]
+load filename = (liftIO $ readFile filename) >>= liftThrows . readExprList

@@ -11,14 +11,14 @@ module Lang.Utils.Error (
   ) where
 
 import Control.Monad.Error (Error(..), ErrorT(..), throwError, catchError, runErrorT)
-import Text.ParserCombinators.Parsec (ParseError)
+import Text.Parsec (ParseError)
 
 -- | Language error datatype
 data LangError a = NumArgs Integer [a]       -- ^ Invalid number of arguments
                  | TypeMismatch String a     -- ^ Invalid type
                  | Parser ParseError         -- ^ Parser error
                  | BadSpecialForm String a   -- ^ Invalid form
-                 | NotFunction String String -- ^ Symbol is not a function
+                 | NotFunction String a      -- ^ Value is not a function
                  | UnboundVar String String  -- ^ Unbound variable
                  | Default String            -- ^ Default error message
 
@@ -37,7 +37,7 @@ showError (Parser parseErr)             = "Parse error at " ++ show parseErr
 showError (BadSpecialForm message form) = concat [message, ": ", show form]
 showError (NotFunction message func)    = concat [message, ": ", show func]
 showError (UnboundVar message varname)  = concat [message, ": ", varname]
-showError (Default message)             = message
+showError (Default message)             = "Error: " ++ message
 
 instance (Show a) => Show (LangError a) where
   show = showError
