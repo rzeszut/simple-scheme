@@ -4,6 +4,7 @@ module Scheme.Primitives.Equal (equalPrimitives) where
 
 import Control.Monad
 import Scheme.Data
+import Scheme.Primitives.Common
 import Lang.Utils.Error
 
 equalPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
@@ -12,7 +13,7 @@ equalPrimitives = [ ("eqv?", eqv)
                   , ("equal?", equal)
                   ]
 
--- TODO: vector support
+-- TODO: vector support; no list, vector, function equality
 eqv :: [SchemeValue] -> ThrowsSchemeError SchemeValue
 eqv [Nil, Nil]                          = return $ Boolean True
 eqv [(Symbol arg1), (Symbol arg2)]      = return . Boolean $ arg1 == arg2
@@ -34,27 +35,9 @@ eqv [arg1@(Cons _ _ ), arg2@(Cons _ _)] = return . Boolean $ arg1 `consEqual` ar
 eqv [_, _]                              = return $ Boolean False
 eqv badArgList                          = throwError $ NumArgs 2 badArgList
 
-unpackNum :: SchemeValue -> ThrowsSchemeError Integer
-unpackNum (Integer i) = return i
-unpackNum notNum      = throwError $ TypeMismatch "number" notNum
-
-unpackString :: SchemeValue -> ThrowsSchemeError String
-unpackString (String s) = return s
-unpackString notStr     = throwError $ TypeMismatch "string" notStr
-
-unpackBoolean :: SchemeValue -> ThrowsSchemeError Bool
-unpackBoolean (Boolean b) = return b
-unpackBoolean notBool     = throwError $ TypeMismatch "boolean" notBool
-
-unpackChar :: SchemeValue -> ThrowsSchemeError Char
-unpackChar (Char c) = return c
-unpackChar notChar  = throwError $ TypeMismatch "char" notChar
-
 -- equals
-data Unpacker = forall a . Eq a => AnyUnpacker (SchemeValue -> ThrowsSchemeError a)
-
 unpackEquals :: SchemeValue -> SchemeValue -> Unpacker -> ThrowsSchemeError Bool
-unpackEquals arg1 arg2 (AnyUnpacker unpacker) =
+unpackEquals arg1 arg2 (Unpacker unpacker) =
   do unpacked1 <- unpacker arg1
      unpacked2 <- unpacker arg2
      return $ unpacked1 == unpacked2
@@ -64,10 +47,13 @@ equal :: [SchemeValue] -> ThrowsSchemeError SchemeValue
 equal [c1@(Cons _ _), c2@(Cons _ _)] = equalCons equal c1 c2
 equal [arg1, arg2] = do
   primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
-                     [ AnyUnpacker unpackNum
-                     , AnyUnpacker unpackChar
-                     , AnyUnpacker unpackString
-                     , AnyUnpacker unpackBoolean
+                     [ Unpacker unpackInteger
+                     , Unpacker unpackRational
+                     , Unpacker unpackFloat
+                     , Unpacker unpackComplex
+                     , Unpacker unpackChar
+                     , Unpacker unpackString
+                     , Unpacker unpackBoolean
                      ]
   eqvEquals <- eqv [arg1, arg2]
   return . Boolean $ (primitiveEquals || let (Boolean x) = eqvEquals in x)

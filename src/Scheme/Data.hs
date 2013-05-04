@@ -29,8 +29,8 @@ data SchemeValue = Nil
                  | Cons SchemeValue SchemeValue
                  | Symbol String
                  | Integer Integer
-                 | Float Double
                  | Rational Rational
+                 | Float Double
                  | Complex (Complex Double)
                  | Boolean Bool
                  | Char Char

@@ -1,13 +1,19 @@
+{-# LANGUAGE ExistentialQuantification #-}
+
 module Scheme.Primitives.Common (
-  -- * Functions
-  -- ** Function makers
+  -- * Functions makers
   makeUnaryFunction
   , makeBinaryFunction
   , makeBinaryBoolFunction
   , unaryFunction
   , unaryThrowingFunction
-    -- * Simple unpackers
+    -- * Unpackers
+  , Unpacker(..)
+    -- ** Simple unpackers
   , unpackInteger
+  , unpackRational
+  , unpackFloat
+  , unpackComplex
   , unpackString
   , unpackBoolean
   , unpackChar
@@ -15,6 +21,8 @@ module Scheme.Primitives.Common (
   , unpackSymbol
   ) where
 
+import Data.Complex (Complex((:+)))
+import Data.Ratio (Rational, (%), numerator, denominator)
 import Lang.Utils.Error
 import Scheme.Data
 
@@ -62,9 +70,34 @@ unaryThrowingFunction :: (SchemeValue -> ThrowsSchemeError SchemeValue)
 unaryThrowingFunction f [v]  = f v
 unaryThrowingFunction _ vals = throwError $ NumArgs 1 vals
 
+--
+-- General unpackers
+--
+data Unpacker = forall a . Eq a => Unpacker (SchemeValue -> ThrowsSchemeError a)
+
 unpackInteger :: SchemeValue -> ThrowsSchemeError Integer
 unpackInteger (Integer i) = return i
 unpackInteger notInteger  = throwError $ TypeMismatch "integer" notInteger
+
+unpackRational :: SchemeValue -> ThrowsSchemeError Rational
+unpackRational (Integer i)  = return $ i % 1
+unpackRational (Rational r) = return r
+unpackRational notRational  = throwError $ TypeMismatch "rational" notRational
+
+unpackFloat :: SchemeValue -> ThrowsSchemeError Double
+unpackFloat (Integer i)  = return $ fromInteger i
+unpackFloat (Rational r) = return $ (fromIntegral $ numerator r)
+                           / (fromIntegral $ denominator r)
+unpackFloat (Float f)    = return f
+unpackFloat notFloat     = throwError $ TypeMismatch "float" notFloat
+
+unpackComplex :: SchemeValue -> ThrowsSchemeError (Complex Double)
+unpackComplex (Integer i)  = return $ (fromInteger i) :+ 0
+unpackComplex (Rational r) = return $ ((fromIntegral $ numerator r)
+                                       / (fromIntegral $ denominator r)) :+ 0
+unpackComplex (Float f)    = return $ f :+ 0
+unpackComplex (Complex c)  = return c
+unpackComplex notComplex   = throwError $ TypeMismatch "complex" notComplex
 
 unpackString :: SchemeValue -> ThrowsSchemeError String
 unpackString (String s) = return s
@@ -72,7 +105,8 @@ unpackString notStr     = throwError $ TypeMismatch "string" notStr
 
 unpackBoolean :: SchemeValue -> ThrowsSchemeError Bool
 unpackBoolean (Boolean b) = return b
-unpackBoolean notBool     = throwError $ TypeMismatch "boolean" notBool
+unpackBoolean _           = return True -- every value other than #f is treated as true
+--unpackBoolean notBool     = throwError $ TypeMismatch "boolean" notBool
 
 unpackChar :: SchemeValue -> ThrowsSchemeError Char
 unpackChar (Char c) = return c
