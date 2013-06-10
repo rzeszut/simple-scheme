@@ -1,124 +1,206 @@
-module Scheme.Eval (eval, apply) where
+module Scheme.Eval ( eval
+                   , apply
+                   ) where
 
 import Control.Monad (liftM, mapM)
 import Control.Monad.Trans (liftIO)
+import Data.Array (listArray)
 import Scheme.Data
-import Scheme.Parser (load)
-import Lang.Utils.Error
-import Lang.Utils.Environment (getVar, setVar, defineVar, bindVars)
+import Scheme.Error
+import Scheme.Environment (getVar, setVar, defineVar, bindVars, newEnv)
+import Scheme.Parser hiding (ParserError(..), ThrowsParserError, parse)
 
-eval :: SchemeEnvironment -> SchemeValue -> IOThrowsSchemeError SchemeValue
-eval _ Nil              = return Nil
-eval _ val@(Integer _)  = return val
-eval _ val@(Float _)    = return val
-eval _ val@(Rational _) = return val
-eval _ val@(Complex _)  = return val
-eval _ val@(Boolean _)  = return val
-eval _ val@(Char _)     = return val
-eval _ val@(String _)   = return val
-eval _ val@(Vector _)   = return val
-eval env (Symbol id)    = getVar env id
+eval :: SchemeEnvironment -> Program -> IOThrowsSchemeError SchemeValue
+eval env (Program commands) = liftM last $ mapM (evalCommand env) commands
 
-eval _ (Cons (Symbol "quote") (Cons val Nil))        = return val
-eval _ form@(Cons (Symbol "unquote") (Cons val Nil)) = throwError $ BadSpecialForm "expression invalid outside of quasiquote" form
-eval env (Cons (Symbol "quasiquote") (Cons val Nil)) = evalQuasiquoted val
+evalCommand :: SchemeEnvironment -> Command -> IOThrowsSchemeError SchemeValue
+evalCommand env (Expression exp) = evalExpression env exp
+evalCommand env (Definition def) = evalDefinition env def
+
+evalDefinition :: SchemeEnvironment -> Definition -> IOThrowsSchemeError SchemeValue
+evalDefinition env (VarDefinition name exp) =
+  evalExpression env exp >>= defineVar env name
+evalDefinition env (FunDefinition name paramsList body) =
+  makeFunction params vararg body env >>= defineVar env name
   where
-    evalQuasiquoted :: SchemeValue -> IOThrowsSchemeError SchemeValue
-    evalQuasiquoted (Cons (Symbol "unquote") (Cons val Nil)) = eval env val
-    evalQuasiquoted (Cons car cdr) =
-      do head <- evalQuasiquoted car
-         tail <- evalQuasiquoted cdr
-         return $ Cons head tail
-    evalQuasiquoted val = return val
+    (params, vararg) = case paramsList of
+      Params p         -> (p, Nothing)
+      VarArgParams p v -> (p, Just v)
 
--- if expression
-eval env (Cons (Symbol "if") (Cons pred
-                              (Cons conseq
-                               (Cons alt Nil)))) =
-  do result <- eval env pred
-     case result of
-       Boolean True  -> eval env conseq
-       Boolean False -> eval env alt
-       _             -> throwError $ TypeMismatch "boolean" pred
+evalExpression :: SchemeEnvironment -> Expression -> IOThrowsSchemeError SchemeValue
+evalExpression env (Ident name)     = getVar env name
+evalExpression env (Literal l)      = return $ evalLiteral l
+evalExpression env (FunctionCall c) = evalCall env c
+evalExpression env (Lambda l)       = evalLambda env l
+evalExpression env (Special s)      = evalSpecial env s
 
--- cond expression
-eval _ form@(Cons (Symbol "cond") Nil) = throwError $ BadSpecialForm "no true clause in cond expression" form
-eval env form@(Cons (Symbol "cond") clauses) = evalClauses clauses
+evalLiteral :: Literal -> SchemeValue
+evalLiteral (SelfEvaluating se) = evalSelfEvaluating se
   where
-    evalClauses (Cons (Cons (Symbol "else")
-                       (Cons expr Nil)) _) = eval env expr
-    evalClauses (Cons (Cons cond
-                       (Cons expr Nil)) rest) = do b <- isTrue cond
-                                                   if b then eval env expr
-                                                     else evalClauses rest
-    evalClauses form = throwError $ BadSpecialForm "ill-formed cond expression: " form
+    evalSelfEvaluating (LNumber num)  = evalNumber num
+    evalSelfEvaluating (LBoolean b)   = Boolean b
+    evalSelfEvaluating (LCharacter c) = Char c
+    evalSelfEvaluating (LString s)    = String s
+    evalSelfEvaluating (LVector v)    = evalVector v
+evalLiteral (Quotation (Quote datum)) = evalDatum datum
 
-    isTrue :: SchemeValue -> IOThrowsSchemeError Bool
-    isTrue cond = do
-      b <- eval env cond
-      case b of
-        Boolean b -> return b
-        _         -> throwError $ TypeMismatch "boolean" cond
-
--- TODO: case form
-
--- set!
-eval env (Cons (Symbol "set!") (Cons (Symbol var) (Cons form Nil))) =
-  eval env form >>= setVar env var
-
--- define
-eval env (Cons (Symbol "define") (Cons (Symbol var) (Cons form Nil))) =
-  eval env form >>= defineVar env var
-
-eval env (Cons (Symbol "define") (Cons (Cons (Symbol var) paramsList) body)) =
-  makeFunction vararg env params body >>= defineVar env var
+evalDatum :: Datum -> SchemeValue
+evalDatum (Simple datum) = evalSimpleDatum datum
   where
-    (params, v) = fromDottedLispList paramsList
-    vararg      = case v of
-      Nil -> Nothing
-      x   -> Just $ show x
-
--- lambda
-eval env (Cons (Symbol "lambda") (Cons paramsList body)) = 
-  makeFunction vararg env params body
+    evalSimpleDatum (DNumber num)  = evalNumber num
+    evalSimpleDatum (DBoolean b)   = Boolean b
+    evalSimpleDatum (DCharacter c) = Char c
+    evalSimpleDatum (DString s)    = String s
+    evalSimpleDatum (DSymbol s)    = Symbol s
+evalDatum (ListDatum list) = evalList list
   where
-    (params, v) = fromDottedLispList paramsList
-    vararg      = case v of
-      Nil -> Nothing
-      x   -> Just $ show x
+    evalList (DList list)            = List (map evalDatum list)
+    evalList (DDottedList list last) = DottedList (map evalDatum list) (evalDatum last)
+evalDatum (VectorDatum vec) = evalVector vec
 
--- load
-eval env (Cons (Symbol "load") (Cons (String filename) Nil)) =
-  load filename >>= liftM last . mapM (eval env)
+evalVector :: Vector -> SchemeValue
+evalVector (DVector values) = Vector $ listArray (0, length values - 1) $ map evalDatum values
 
--- begin
-eval env (Cons (Symbol "begin") body) =
-  liftM last $ mapM (eval env) (fromLispList body)
+evalNumber :: Number -> SchemeValue
+evalNumber (NInteger int) = Integer int
+evalNumber (NRational r)  = Rational r
+evalNumber (NFloat f)     = Float f
+evalNumber (NComplex c)   = Complex c
 
--- function application
-eval env (Cons (Symbol function) args) = do
-  fun     <- getVar env function
-  argVals <- mapM (eval env) (fromLispList args)
-  apply fun argVals
+evalCall :: SchemeEnvironment -> FunctionCall -> IOThrowsSchemeError SchemeValue
+evalCall env (FuncCall fun args) = do
+  function <- evalExpression env fun
+  argVals  <- mapM (evalExpression env) args
+  apply env function argVals
 
-eval env badForm =
-  throwError $ BadSpecialForm "Unrecognized special form" badForm
-  
-makeFunction varargs env params body = return $ Function (map show params) varargs body env
+evalLambda :: SchemeEnvironment -> Lambda -> IOThrowsSchemeError SchemeValue
+evalLambda env (LambdaFun paramsList body) = 
+  makeFunction params vararg body env
+  where
+    (params, vararg) = case paramsList of
+      LParamsList v     -> ([], Just v)
+      LParams p         -> (p, Nothing)
+      LVarArgParams p v -> (p, Just v)
 
--- TODO: add environment for native functions
-apply :: SchemeValue -> [SchemeValue] -> IOThrowsSchemeError SchemeValue
-apply (NativeFunction fun) args   = liftThrows $ fun args
-apply (IONativeFunction fun) args = fun args
-apply (Function params vararg body closure) args =
+evalSpecial :: SchemeEnvironment -> Special -> IOThrowsSchemeError SchemeValue
+evalSpecial env (Set name val) =
+  evalExpression env val >>= setVar env name
+
+evalSpecial env (If cond true false) =
+  do result <- evalExpression env cond
+     if isTrue result then evalExpression env true
+       else evalElse false
+  where
+    evalElse (Else exp) = evalExpression env exp
+    evalElse (Empty)    = return $ Boolean False
+
+evalSpecial env (Begin exps) =
+  liftM last $ mapM (evalExpression env) exps
+
+evalSpecial env (Or exps) = evalOr exps
+  where
+    evalOr []       = return $ Boolean False
+    evalOr (e:rest) = do val <- evalExpression env e
+                         if isTrue val then return val
+                           else evalOr rest
+
+evalSpecial env (And exps) = evalAnd (Boolean True) exps
+  where
+    evalAnd last []       = return last
+    evalAnd last (e:rest) = do val <- evalExpression env e
+                               if isTrue val then evalAnd val rest
+                                 else return val
+
+evalSpecial env (Cond clauses)      = evalCond env clauses
+
+evalSpecial env (Let bindings (Body body)) = do
+  vals   <- mapM (evalExpression env) exprs
+  newEnv <- liftIO $ bindVars env (zip idents vals)
+  liftM last $ mapM (evalCommand newEnv) body
+  where
+    idents = map getName bindings
+    exprs  = map getExpr bindings
+
+evalSpecial env (LetRec bindings (Body body)) = do
+  newEnv <- liftIO $ newEnv env
+  mapM (newVar newEnv) (zip idents exprs)
+  liftM last $ mapM (evalCommand newEnv) body
+  where
+    newVar env (var, expr) = do
+      val <- evalExpression env expr
+      defineVar env var val
+    idents = map getName bindings
+    exprs  = map getExpr bindings
+
+evalSpecial env (Delay expr) = return $ Function [] Nothing [Expression expr] env
+
+evalSpecial env (QuasiQuotation qq) = evalQQ env qq
+
+evalCond :: SchemeEnvironment -> [CondClause] -> IOThrowsSchemeError SchemeValue
+evalCond env [] = throwError $ Default "Ill-formed cond expression."
+evalCond env (c:rest) = case c of
+  CondElseClause exp  -> evalExpression env exp
+  CondClause cond exp -> do val <- evalExpression env cond
+                            if isTrue val then evalExpression env exp
+                              else evalCond env rest
+
+evalQQ :: SchemeEnvironment -> QuasiQuotation -> IOThrowsSchemeError SchemeValue
+evalQQ env (QQuote template) = evalTemplate env template
+
+evalTemplate :: SchemeEnvironment -> Template -> IOThrowsSchemeError SchemeValue
+evalTemplate env (SimpleDatum datum)   = return $ evalDatum (Simple datum)
+evalTemplate env (ListTemplate list)   = evalListTemplate env list
+evalTemplate env (VectorTemplate vec)  = evalVectorTemplate env vec
+evalTemplate env (QuotedTemplate temp) = do
+  template <- evalTemplate env temp
+  return $ List [Symbol "quote", template]
+evalTemplate env (UnQuotation (UnQuote e)) = evalExpression env e
+
+evalListTemplate :: SchemeEnvironment -> ListTemplate -> IOThrowsSchemeError SchemeValue
+evalListTemplate env (ListTmp ts) = do
+  evaled <- mapM (evalTemplateOrSplice env) ts
+  return . List $ concat evaled
+evalListTemplate env (DottedListTmp ts last) = do
+  evaled     <- mapM (evalTemplateOrSplice env) ts
+  lastEvaled <- evalTemplate env last
+  return $ DottedList (concat evaled) lastEvaled
+
+evalVectorTemplate :: SchemeEnvironment -> VectorTemplate -> IOThrowsSchemeError SchemeValue
+evalVectorTemplate env (VectorTmp ts) = do
+  evaled <- mapM (evalTemplateOrSplice env) ts
+  let lst = concat evaled
+  return . Vector $ listArray (0, length lst - 1) lst
+
+evalTemplateOrSplice :: SchemeEnvironment -> TemplateOrSplice -> IOThrowsSchemeError [SchemeValue]
+evalTemplateOrSplice env (Template t) = do
+  evaled <- evalTemplate env t
+  return [evaled]
+evalTemplateOrSplice env (Splice (UnQuoteSplicing expr)) = do
+  list <- evalExpression env expr
+  case list of
+    List l -> return l
+    _      -> throwError $ TypeMismatch "list" list
+
+apply :: SchemeEnvironment -> SchemeValue -> [SchemeValue] -> IOThrowsSchemeError SchemeValue
+apply _   (NativeFunction fun) args   = liftThrows $ fun args
+apply env (IONativeFunction fun) args = fun env args
+apply _   (Function params vararg body closure) args =
   if num params /= num args && vararg == Nothing
-    then throwError $ NumArgs (num params) args
-    else (liftIO $ bindVars closure $ zip params args) >>= bindVarArg vararg >>= evalBody
+  then throwError $ NumArgs (num params) args
+  else (liftIO $ bindVars closure $ zip params args)
+       >>= bindVarArg vararg
+       >>= evalBody
   where
     remainingArgs      = drop (length params) args
     num                = toInteger . length
-    evalBody env       = liftM last $ mapM (eval env) (fromLispList body)
+    evalBody env       = liftM last $ mapM (evalCommand env) body
     bindVarArg arg env = case arg of
       Nothing      -> return env
-      Just argName -> liftIO $ bindVars env [(argName, toLispList remainingArgs)]
-apply fun _ = throwError $ NotFunction "value is not a function" fun
+      Just argName -> liftIO $ bindVars env [(argName, List remainingArgs)]
+apply _ fun _ = throwError $ NotFunction "value is not a function" fun
+
+makeFunction params varargs (Body body) env = return $ Function params varargs body env
+
+isTrue :: SchemeValue -> Bool
+isTrue (Boolean False) = False
+isTrue _               = True

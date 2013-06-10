@@ -9,24 +9,19 @@ module Scheme.Data (
   , IOThrowsSchemeError(..)
     -- ** Scheme Environment
   , SchemeEnvironment(..)
-    -- * Functions
-  , fromLispList
-  , toLispList
-  , fromDottedLispList
-  , toDottedLispList
   ) where
 
 import Data.Array (Array, elems)
 import Data.Ratio (Rational, numerator, denominator)
 import Data.Complex (Complex((:+)))
-import Text.ParserCombinators.Parsec (ParseError)
-import Lang.Utils.Error (LangError(..), ThrowsError, IOThrowsError)
-import Lang.Utils.Environment (Environment)
+import Scheme.Error (LangError(..), ThrowsError, IOThrowsError)
+import Scheme.Environment (Environment)
+import Scheme.Parser (Command(..))
 import System.IO (Handle)
 
 -- | Scheme value datatype
-data SchemeValue = Nil
-                 | Cons SchemeValue SchemeValue
+data SchemeValue = List [SchemeValue]
+                 | DottedList [SchemeValue] SchemeValue
                  | Symbol String
                  | Integer Integer
                  | Rational Rational
@@ -37,16 +32,15 @@ data SchemeValue = Nil
                  | String String
                  | Vector (Array Int SchemeValue)
                  | NativeFunction ([SchemeValue] -> ThrowsSchemeError SchemeValue)
-                 | IONativeFunction ([SchemeValue] -> IOThrowsSchemeError SchemeValue)
+                 | IONativeFunction (SchemeEnvironment -> [SchemeValue] -> IOThrowsSchemeError SchemeValue)
                  | Function { params  :: [String]
                             , vararg  :: Maybe String
-                            , body    :: SchemeValue
+                            , body    :: [Command]
                             , closure :: SchemeEnvironment
                             }
                  | Port Handle
 
 showVal :: SchemeValue -> String
-showVal Nil                  = "()"
 showVal (Symbol    name)     = name
 showVal (Integer   int)      = show int
 showVal (Float     dbl)      = show dbl
@@ -73,12 +67,17 @@ showVal (Function {params = args, vararg = varargs}) =
 
 showVal (Port _)             = "<port>"
 
-showVal cell@(Cons _ _)      = concat ["(", showCell cell, ")"]
+showVal (List list)            = concat ["(", contents, ")"]
   where
-    showCell Nil                       = ""
-    showCell (Cons car Nil)            = showVal car
-    showCell (Cons car cdr@(Cons _ _)) = concat [showVal car, " ", showCell cdr]
-    showCell (Cons car cdr)            = concat [showVal car, " . ", showVal cdr]
+    contents = unwords $ map showVal list
+showVal (DottedList list last) = concat [ "("
+                                        , contents
+                                        , " . "
+                                        , showVal last
+                                        , ")"
+                                        ]
+  where
+    contents = unwords $ map showVal list
 
 instance Show SchemeValue where
   show = showVal
@@ -88,21 +87,3 @@ type ThrowsSchemeError   = ThrowsError SchemeValue
 type IOThrowsSchemeError = IOThrowsError SchemeValue
 
 type SchemeEnvironment   = Environment SchemeValue
-
-fromLispList :: SchemeValue -> [SchemeValue]
-fromLispList Nil        = []
-fromLispList (Cons h t) = h : (fromLispList t)
-
-toLispList :: [SchemeValue] -> SchemeValue
-toLispList []     = Nil
-toLispList (x:xs) = Cons x (toLispList xs)
-
-fromDottedLispList :: SchemeValue -> ([SchemeValue], SchemeValue)
-fromDottedLispList (Cons car cdr) = (car : rest, last)
-  where (rest, last) = fromDottedLispList cdr
-fromDottedLispList x              = ([], x)
-
-toDottedLispList :: [SchemeValue] -> SchemeValue -> SchemeValue
-toDottedLispList [] _        = Nil
-toDottedLispList [car] cdr   = Cons car cdr
-toDottedLispList (x:xs) last = Cons x (toDottedLispList xs last)

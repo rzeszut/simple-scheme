@@ -1,11 +1,13 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
-module Scheme.Primitives.Equal (equalPrimitives) where
+module Scheme.Primitives.Equal ( equalPrimitives
+                               , unpackEquals
+                               ) where
 
 import Control.Monad
 import Scheme.Data
 import Scheme.Primitives.Common
-import Lang.Utils.Error
+import Scheme.Error
 
 equalPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
 equalPrimitives = [ ("eqv?", eqv)
@@ -15,26 +17,30 @@ equalPrimitives = [ ("eqv?", eqv)
 
 -- TODO: vector support; no list, vector, function equality
 eqv :: [SchemeValue] -> ThrowsSchemeError SchemeValue
-eqv [Nil, Nil]                          = return $ Boolean True
-eqv [(Symbol arg1), (Symbol arg2)]      = return . Boolean $ arg1 == arg2
-eqv [(Integer arg1), (Integer arg2)]    = return . Boolean $ arg1 == arg2
-eqv [(Float arg1), (Float arg2)]        = return . Boolean $ arg1 == arg2
-eqv [(Rational arg1), (Rational arg2)]  = return . Boolean $ arg1 == arg2
-eqv [(Complex arg1), (Complex arg2)]    = return . Boolean $ arg1 == arg2
-eqv [(Boolean arg1), (Boolean arg2)]    = return . Boolean $ arg1 == arg2
-eqv [(Char arg1), (Char arg2)]          = return . Boolean $ arg1 == arg2
-eqv [(String arg1), (String arg2)]      = return . Boolean $ arg1 == arg2
-eqv [arg1@(Cons _ _ ), arg2@(Cons _ _)] = return . Boolean $ arg1 `consEqual` arg2
-  where
-    consEqual Nil Nil = True
-    consEqual Nil _   = False
-    consEqual _   Nil = False
-    consEqual (Cons h1 t1) (Cons h2 t2) = case eqv [h1, h2] of
-      Left  _             -> False
-      Right (Boolean val) -> val
-eqv [_, _]                              = return $ Boolean False
-eqv badArgList                          = throwError $ NumArgs 2 badArgList
+eqv [(Symbol arg1),     (Symbol arg2)]     = return . Boolean $ arg1 == arg2
+eqv [(Integer arg1),    (Integer arg2)]    = return . Boolean $ arg1 == arg2
+eqv [(Float arg1),      (Float arg2)]      = return . Boolean $ arg1 == arg2
+eqv [(Rational arg1),   (Rational arg2)]   = return . Boolean $ arg1 == arg2
+eqv [(Complex arg1),    (Complex arg2)]    = return . Boolean $ arg1 == arg2
+eqv [(Boolean arg1),    (Boolean arg2)]    = return . Boolean $ arg1 == arg2
+eqv [(Char arg1),       (Char arg2)]       = return . Boolean $ arg1 == arg2
+eqv [(String arg1),     (String arg2)]     = return . Boolean $ arg1 == arg2
+eqv [(DottedList xs x), (DottedList ys y)] = eqv [List $ x : xs, List $ y : ys]
+eqv [(List xs),         (List ys)]         = listEqual eqv xs ys
+eqv [_, _]                                 = return $ Boolean False
+eqv badArgList                             = throwError $ NumArgs 2 badArgList
 
+listEqual :: ([SchemeValue] -> ThrowsSchemeError SchemeValue)
+             -> [SchemeValue]
+             -> [SchemeValue]
+             -> ThrowsSchemeError SchemeValue
+listEqual eq xs ys =
+  return . Boolean $ (length xs == length ys) && (all eqvPair $ zip xs ys)
+  where
+    eqvPair (x1, x2) = case eq [x1, x2] of
+      Left _              -> False
+      Right (Boolean val) -> val
+  
 -- equals
 unpackEquals :: SchemeValue -> SchemeValue -> Unpacker -> ThrowsSchemeError Bool
 unpackEquals arg1 arg2 (Unpacker unpacker) =
@@ -44,7 +50,8 @@ unpackEquals arg1 arg2 (Unpacker unpacker) =
   `catchError` (const $ return False)
 
 equal :: [SchemeValue] -> ThrowsSchemeError SchemeValue
-equal [c1@(Cons _ _), c2@(Cons _ _)] = equalCons equal c1 c2
+equal [(List xs),         (List ys)]         = listEqual equal xs ys
+equal [(DottedList xs x), (DottedList ys y)] = listEqual equal (x : xs) (y : ys)
 equal [arg1, arg2] = do
   primitiveEquals <- liftM or $ mapM (unpackEquals arg1 arg2)
                      [ Unpacker unpackInteger
@@ -53,17 +60,13 @@ equal [arg1, arg2] = do
                      , Unpacker unpackComplex
                      , Unpacker unpackChar
                      , Unpacker unpackString
-                     , Unpacker unpackBoolean
+                     , Unpacker unpackBoolean'
                      ]
   eqvEquals <- eqv [arg1, arg2]
   return . Boolean $ (primitiveEquals || let (Boolean x) = eqvEquals in x)
 equal badArgList = throwError $ NumArgs 2 badArgList
 
-equalCons :: ([SchemeValue] -> ThrowsSchemeError SchemeValue) -> SchemeValue -> SchemeValue -> ThrowsSchemeError SchemeValue
-equalCons eq (Cons h1 t1) (Cons h2 t2) = do
-    eqh <- equal [h1, h2]
-    eqt <- equal [t1, t2]
-    return . Boolean $ (let (Boolean h) = eqh;
-                            (Boolean t) = eqt
-                        in h && t)
-
+-- equal? must use different boolean unpacker, the standard one breaks this function
+unpackBoolean' :: SchemeValue -> ThrowsSchemeError Bool
+unpackBoolean' (Boolean b) = return b
+unpackBoolean' notBool     = throwError $ TypeMismatch "boolean" notBool

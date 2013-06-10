@@ -1,7 +1,7 @@
 module Scheme.Primitives.Char (charPrimitives) where
 
 import Data.Char
-import Lang.Utils.Error
+import Scheme.Error
 import Scheme.Data
 import Scheme.Primitives.Common
 

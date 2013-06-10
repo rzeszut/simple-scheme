@@ -1,6 +1,6 @@
 module Scheme.Primitives.Symbol (symbolPrimitives) where
 
-import Lang.Utils.Error
+import Scheme.Error
 import Scheme.Data
 import Scheme.Primitives.Common
 

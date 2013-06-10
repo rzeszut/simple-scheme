@@ -1,7 +1,7 @@
 module Scheme.Primitives.String (stringPrimitives) where
 
 import Data.Char (toLower)
-import Lang.Utils.Error
+import Scheme.Error
 import Scheme.Data
 import Scheme.Primitives.Common
 
@@ -44,8 +44,8 @@ stringAppend s = do
   strings <- sequence $ map unpackString s
   return . String $ concat strings
 
-string2list = stringUnary (map Char) (return . toLispList)
-list2string = makeUnaryFunction (return . fromLispList)
+string2list = stringUnary (map Char) (return . List)
+list2string = makeUnaryFunction unpackList
               (map unpackChar)
               (\l -> sequence l >>= return . String)
 

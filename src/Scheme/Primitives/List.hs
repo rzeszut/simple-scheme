@@ -1,6 +1,6 @@
 module Scheme.Primitives.List (listPrimitives) where
 
-import Lang.Utils.Error
+import Scheme.Error
 import Scheme.Data
 import Scheme.Primitives.Common
 
@@ -13,20 +13,25 @@ listPrimitives = [ ("pair?",  unaryFunction pairp)
                  , ("list?",  unaryFunction listp)
                  ]
 
-pairp (Cons _ _) = Boolean True
-pairp _          = Boolean False
+pairp (DottedList _ _) = Boolean True
+pairp (List [])        = Boolean False
+pairp (List _)         = Boolean True
+pairp _                = Boolean False
 
-cons = makeBinaryFunction return return Cons return
+cons = makeBinaryFunction return return cons' return
+  where
+    cons' x (List [])             = List [x]
+    cons' x (List xs)             = List $ x : xs
+    cons' x (DottedList xs xlast) = DottedList (x : xs) xlast
+    cons' x y                     = DottedList [x] y
 
 car = makeUnaryFunction unpackPair (\(h, _) -> h) return
 cdr = makeUnaryFunction unpackPair (\(_, t) -> t) return
 
 -- set-car!, set-cdr!
 
-nullp Nil = Boolean True
-nullp _   = Boolean False
+nullp (List []) = Boolean True
+nullp _         = Boolean False
 
-listp Nil                   = Boolean True
-listp (Cons _ Nil)          = Boolean True
-listp (Cons _ t@(Cons _ _)) = listp t
-listp _                     = Boolean False
+listp (List _) = Boolean True
+listp _        = Boolean False

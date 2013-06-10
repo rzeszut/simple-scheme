@@ -1,4 +1,4 @@
-'lists
+;; lists
 (define (caar list) (car (car list)))
 (define (cadr list) (car (cdr list)))
 (define (cdar list) (cdr (car list)))
@@ -44,17 +44,17 @@
 (define (reverse list)
   (foldl (lambda (acc x)
            (cons x acc))
-         () list))
+         '() list))
 
 (define (list-tail list k)
   (if (zero? k)
       list
-      (list-ref (cdr list) (-1 k))))
+      (list-tail (cdr list) (- k 1))))
 
 (define (list-ref list k)
   (if (zero? k)
       (car list)
-      (list-ref (cdr list) (-1 k))))
+      (list-ref (cdr list) (- k 1))))
 
 (define (memq obj list)
   (if (null? list)
@@ -62,7 +62,7 @@
       (if (eq? (car list) obj)
           list
           (memq obj (cdr list)))))
-  
+
 (define (memv obj list)
   (if (null? list)
       #f
@@ -98,7 +98,7 @@
           (car alist)
           (assoc obj (cdr alist)))))
 
-'characters
+;; characters
 (define (char-ci=? char1 char2)
   (char=? (char-downcase char1)
           (char-downcase char2)))
@@ -113,23 +113,56 @@
 
 (define (char-ci<=? char1 char2)
   (char<=? (char-downcase char1)
-          (char-downcase char2)))
+           (char-downcase char2)))
 
 (define (char-ci>=? char1 char2)
   (char>=? (char-downcase char1)
-          (char-downcase char2)))
+           (char-downcase char2)))
 
-'strings
+;; strings
 (define (string . args)
   (apply list->string (list args)))
 
-'numbers
+;; numbers
+(define (+ . lst)
+  (foldl __add 0 lst))
+
+(define (- . lst)
+  (define l (length lst))
+  (cond ((= l 0) (error "Invalid number of arguments."))
+        ((= l 1) (__sub 0 (car lst)))
+        (else (foldl __sub (car lst) (cdr lst)))))
+
+(define (- . lst)
+  (let ((l (length lst)))
+    (cond ((= l 0) (error "Invalid number of arguments."))
+        ((= l 1) (__sub 0 (car lst)))
+        (else (foldl __sub (car lst) (cdr lst))))))
+
+(define (* . lst)
+  (foldl __sub 0 lst))
+
 (define (zero? num) (= 0 num))
+(define (positive? num) (> num 0))
+(define (negative? num) (< num 0))
+(define (odd? num) (= (modulo num 2) 1))
+(define (even? num) (= (modulo num 2) 0))
 
-(define (-1 num) (- 1 num))
-(define (+1 num) (- 1 num))
+(define (min . lst)
+  (foldl (lambda (acc el)
+           (if (< el acc)
+               el
+               acc))
+         (car lst) (cdr lst)))
 
-'control
+(define (max . lst)
+  (foldl (lambda (acc el)
+           (if (> el acc)
+               el
+               acc))
+         (car lst) (cdr lst)))
+
+;; control
 (define (map fun list)
   (if (null? list)
       '()
@@ -152,4 +185,30 @@
       (begin (fun (car list))
              (for-each fun (cdr list)))))
 
-'stdlib
+(define (force promise)
+  (promise))
+
+;; io
+(define (call-with-input-file filename proc)
+  (let ((port (open-input-file filename))
+        (v (proc port)))
+    (close-input-port port)
+    v))
+
+(define (call-with-input-file filename proc)
+  (let ((port (open-input-file filename))
+        (v (proc port)))
+    (close-input-port port)
+    v))
+
+(define (call-with-output-file filename proc)
+  (define port (open-output-file filename))
+  (define v (proc port))
+  (close-output-port port)
+  v)
+
+(define (newline . port)
+  (if (null? port)
+      (write-char #\newline)
+      (write-char #\newline (car port))))
+

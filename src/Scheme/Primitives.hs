@@ -11,19 +11,20 @@ import Scheme.Primitives.Symbol
 import Scheme.Primitives.Vector
 import Scheme.Primitives.Control
 import Scheme.Primitives.IO
-import Lang.Utils.Environment
+import Scheme.Environment
 
 primitiveBindings :: IO SchemeEnvironment
-primitiveBindings = nullEnvironment >>= (flip bindVars $
-                                         (map (makeNativeFunc NativeFunction) equalPrimitives) ++
-                                         (map (makeNativeFunc NativeFunction) booleanPrimitives) ++
-                                         (map (makeNativeFunc NativeFunction) charPrimitives) ++
-                                         (map (makeNativeFunc NativeFunction) listPrimitives) ++
-                                         (map (makeNativeFunc NativeFunction) numberPrimitives) ++
-                                         (map (makeNativeFunc NativeFunction) stringPrimitives) ++
-                                         (map (makeNativeFunc NativeFunction) symbolPrimitives) ++
-                                         (map (makeNativeFunc NativeFunction) vectorPrimitives) ++
-                                         (map (makeNativeFunc IONativeFunction) controlPrimitives) ++
-                                         (map (makeNativeFunc IONativeFunction) ioPrimitives))
+primitiveBindings = nullEnvironment >>= (flip bindVars $ concat
+                                         [ (map (makeNativeFunc NativeFunction) equalPrimitives)
+                                         , (map (makeNativeFunc NativeFunction) booleanPrimitives)
+                                         , (map (makeNativeFunc NativeFunction) charPrimitives)
+                                         , (map (makeNativeFunc NativeFunction) listPrimitives)
+                                         , (map (makeNativeFunc NativeFunction) numberPrimitives)
+                                         , (map (makeNativeFunc NativeFunction) stringPrimitives)
+                                         , (map (makeNativeFunc NativeFunction) symbolPrimitives)
+                                         , (map (makeNativeFunc NativeFunction) vectorPrimitives)
+                                         , (map (makeNativeFunc IONativeFunction) controlPrimitives)
+                                         , (map (makeNativeFunc IONativeFunction) ioPrimitives)
+                                         ])
   where
     makeNativeFunc constructor (var, fun) = (var, constructor fun)

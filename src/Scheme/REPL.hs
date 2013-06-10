@@ -3,38 +3,55 @@ module Scheme.REPL ( runFile
                    ) where
 
 import Control.Monad
+import Paths_simple_scheme (getDataFileName)
 import Scheme.Data
 import Scheme.Eval
-import Scheme.Parser
+import Scheme.Parser (parse)
 import Scheme.Primitives
+import Scheme.Primitives.IO (load)
+import Scheme.Scanner (scan)
 import System.IO
-import Lang.Utils.Error (runIOThrows, liftThrows)
-import Lang.Utils.Environment (bindVars)
+import Scheme.Error (runIOThrows, liftThrows, liftScanner, liftParser)
+import Scheme.Environment (bindVars, defineVar)
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
 
-readPrompt :: String -> IO String
-readPrompt str = flushStr str >> getLine
-
 evalString :: SchemeEnvironment -> String -> IO String
-evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
+evalString env expr = runIOThrows $ liftM show $
+                      (liftScanner $ scan expr)
+                      >>= (\ast -> liftParser $ parse ast)
+                      >>= eval env
 
 evalAndPrint :: SchemeEnvironment -> String -> IO ()
-evalAndPrint env str = evalString env str >>= putStrLn
+evalAndPrint env str
+    | length str == 0 = return ()
+    | otherwise      = evalString env str >>= putStrLn
 
-until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
-until_ pred prompt action = do
-  result <- prompt
-  if pred result
-    then return ()
-    else action result >> until_ pred prompt action
+ioUntil :: (String -> Bool) -> String -> (String -> IO ()) -> IO ()
+ioUntil pred prompt action = do
+  flushStr prompt
+  eof <- isEOF
+  if eof then return ()
+    else do
+    result <- getLine
+    if pred result
+      then return ()
+      else action result >> ioUntil pred prompt action
+
+r5rsEnvironment :: IO SchemeEnvironment
+r5rsEnvironment = do
+  env <- primitiveBindings
+  stdlib <- getDataFileName "scheme/stdlib.scm"
+  runIOThrows $ liftM show $ load env stdlib
+  return env
 
 runFile :: [String] -> IO ()
 runFile args = do
-  env <- primitiveBindings >>= flip bindVars [("args", toLispList $ map String $ drop 1 args)]
-  (runIOThrows $ liftM show $ eval env (Cons (Symbol "load") (Cons (String $ args !! 0) Nil)))
-    >>= hPutStrLn stderr
+  env <- r5rsEnvironment >>= flip bindVars [("args", List $ map String $ drop 1 args)]
+  (runIOThrows $ liftM show $ load env $ args !! 0) >>= hPutStrLn stderr
 
 runRepl :: IO ()
-runRepl = primitiveBindings >>= until_ (== ":q") (readPrompt "scheme> ") . evalAndPrint
+runRepl = do
+  env <- r5rsEnvironment
+  ioUntil (== ":q") "scheme> " . evalAndPrint $ env

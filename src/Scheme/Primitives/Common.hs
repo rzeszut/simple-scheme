@@ -7,6 +7,10 @@ module Scheme.Primitives.Common (
   , makeBinaryBoolFunction
   , unaryFunction
   , unaryThrowingFunction
+  , unaryIoThrowingFunction
+  , binaryFunction
+  , binaryThrowingFunction
+  , ignoreEnvironment
     -- * Unpackers
   , Unpacker(..)
     -- ** Simple unpackers
@@ -17,14 +21,15 @@ module Scheme.Primitives.Common (
   , unpackString
   , unpackBoolean
   , unpackChar
-  , unpackPair
   , unpackSymbol
+  , unpackList
+  , unpackPair
   ) where
 
 import Data.Complex (Complex((:+)))
 import Data.Ratio (Rational, (%), numerator, denominator)
-import Lang.Utils.Error
 import Scheme.Data
+import Scheme.Error
 
 makeUnaryFunction :: (SchemeValue -> ThrowsSchemeError b)
                      -> (b -> a)
@@ -64,11 +69,36 @@ unaryFunction :: (SchemeValue -> SchemeValue)
 unaryFunction f [v]  = return $ f v
 unaryFunction _ vals = throwError $ NumArgs 1 vals
 
+binaryFunction :: (SchemeValue -> SchemeValue -> SchemeValue)
+                 -> [SchemeValue]
+                 -> ThrowsSchemeError SchemeValue
+binaryFunction f [v1, v2]  = return $ f v1 v2
+binaryFunction _ vals      = throwError $ NumArgs 2 vals
+
+
 unaryThrowingFunction :: (SchemeValue -> ThrowsSchemeError SchemeValue)
                          -> [SchemeValue]
                          -> ThrowsSchemeError SchemeValue
 unaryThrowingFunction f [v]  = f v
 unaryThrowingFunction _ vals = throwError $ NumArgs 1 vals
+
+binaryThrowingFunction :: (SchemeValue -> SchemeValue -> ThrowsSchemeError SchemeValue)
+                 -> [SchemeValue]
+                 -> ThrowsSchemeError SchemeValue
+binaryThrowingFunction f [v1, v2]  = f v1 v2
+binaryThrowingFunction _ vals      = throwError $ NumArgs 2 vals
+
+unaryIoThrowingFunction :: (SchemeValue -> IOThrowsSchemeError SchemeValue)
+                         -> [SchemeValue]
+                         -> IOThrowsSchemeError SchemeValue
+unaryIoThrowingFunction f [v]  = f v
+unaryIoThrowingFunction _ vals = throwError $ NumArgs 1 vals
+
+ignoreEnvironment :: ([SchemeValue] -> IOThrowsSchemeError SchemeValue)
+                     -> SchemeEnvironment
+                     -> [SchemeValue]
+                     -> IOThrowsSchemeError SchemeValue
+ignoreEnvironment fun = \env args -> fun args
 
 --
 -- General unpackers
@@ -112,10 +142,17 @@ unpackChar :: SchemeValue -> ThrowsSchemeError Char
 unpackChar (Char c) = return c
 unpackChar notChar  = throwError $ TypeMismatch "char" notChar
 
-unpackPair :: SchemeValue -> ThrowsSchemeError (SchemeValue, SchemeValue)
-unpackPair (Cons car cdr) = return (car, cdr)
-unpackPair notPair        = throwError $ TypeMismatch "pair" notPair
-
 unpackSymbol :: SchemeValue -> ThrowsSchemeError String
 unpackSymbol (Symbol s) = return s
 unpackSymbol notSym     = throwError $ TypeMismatch "symbol" notSym
+
+unpackList :: SchemeValue -> ThrowsSchemeError [SchemeValue]
+unpackList (List xs) = return xs
+unpackList notList   = throwError $ TypeMismatch "list" notList
+
+unpackPair :: SchemeValue -> ThrowsSchemeError (SchemeValue, SchemeValue)
+unpackPair (List (car : cdr))          = return (car, List cdr)
+unpackPair (DottedList [car] cdr)      = return (car, cdr)
+unpackPair (DottedList (x : xs) xlast) = return (x, DottedList xs xlast)
+unpackPair notPair                     = throwError $ TypeMismatch "pair" notPair
+
