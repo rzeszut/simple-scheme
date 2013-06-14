@@ -27,7 +27,7 @@ You need to have cabal (and some libraries: parsec and mtl) installed:
 
     sudo apt-get install cabal-install
     cabal update
-    cabal install mtl parsec
+    cabal install mtl split array alex happy
 
 Warning! GHC is in conflict with binutils-gold, don't install it, or you will get an error like that:
 

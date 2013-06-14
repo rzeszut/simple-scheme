@@ -7,7 +7,7 @@ import Control.Monad.Trans (liftIO)
 import Scheme.Data
 import Scheme.Error
 import Scheme.Primitives.Common (ignoreEnvironment, unaryIoThrowingFunction)
-import Scheme.Scanner (scan)
+import Scheme.Scanner (scan, defaultPos, Token(Token), SchemeToken(Quote))
 import Scheme.Parser (parse)
 import Scheme.Eval (eval)
 import System.IO
@@ -21,13 +21,18 @@ ioPrimitives = [ ("open-input-file",     ignoreEnvironment $ makePort ReadMode)
                , ("output-port?",        ignoreEnvironment $ unaryIoThrowingFunction outputPortp)
                , ("current-input-port",  ignoreEnvironment $ currentInputPort)
                , ("current-output-port", ignoreEnvironment $ currentOutputPort)
-               , ("read-char",           ignoreEnvironment $ readChar)
-               , ("peek-char",           ignoreEnvironment $ peekChar)
-               , ("eof-object?",         ignoreEnvironment $ unaryIoThrowingFunction eofObjectp)
-               , ("char-ready?",         ignoreEnvironment $ charReadyp)
-               , ("write-char",          ignoreEnvironment $ writeChar)
-               , ("display",             ignoreEnvironment $ writeProc)
-               , ("load",                loadProc)
+
+               , ("read",        readProc)
+               , ("read-char",   ignoreEnvironment $ readChar)
+               , ("peek-char",   ignoreEnvironment $ peekChar)
+               , ("eof-object?", ignoreEnvironment $ unaryIoThrowingFunction eofObjectp)
+               , ("char-ready?", ignoreEnvironment $ charReadyp)
+
+               , ("write-char", ignoreEnvironment $ writeChar)
+               , ("display",    ignoreEnvironment $ writeProc)
+               , ("write",      ignoreEnvironment $ writeProc)
+
+               , ("load", loadProc)
                ]
 
 makePort :: IOMode -> [SchemeValue] -> IOThrowsSchemeError SchemeValue
@@ -59,6 +64,16 @@ currentInputPort args = throwError $ NumArgs 0 args
 currentOutputPort :: [SchemeValue] -> IOThrowsSchemeError SchemeValue
 currentOutputPort []   = return $ Port stdout
 currentOutputPort args = throwError $ NumArgs 0 args
+
+readProc :: SchemeEnvironment -> [SchemeValue] -> IOThrowsSchemeError SchemeValue
+readProc env []          = readProc env [Port stdin]
+readProc env [Port port] = do
+  str    <- liftIO $ hGetLine port
+  tokens <- liftIOScanner $ scan str
+  d      <- liftParser    $ parse $ Token defaultPos Quote : tokens
+  eval env d
+readProc _ [notPort]     = throwError $ TypeMismatch "port" notPort
+readProc _ args          = throwError $ NumArgs 1 args
 
 readChar :: [SchemeValue] -> IOThrowsSchemeError SchemeValue
 readChar []          = readChar [Port stdin]
@@ -110,6 +125,6 @@ loadProc env xs                = throwError $ NumArgs 1 xs
 load :: SchemeEnvironment -> String -> IOThrowsSchemeError SchemeValue
 load env filename = do
   program <- liftIO $ readFile filename
-  tokens  <- liftScanner $ scan program
+  tokens  <- liftIOScanner $ scan program
   ast     <- liftParser  $ parse tokens
   eval env ast

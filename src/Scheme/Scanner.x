@@ -1,5 +1,6 @@
 {
 module Scheme.Scanner ( Token(..)
+                      , defaultPos
                       , getLineNum
                       , getColumnNum
                       , SchemeToken(..)
@@ -15,7 +16,6 @@ import Data.Ratio (Rational, (%), numerator, denominator)
 import Data.List.Split (split, dropInitBlank, keepDelimsL, oneOf)
 import Numeric (readOct, readHex, readInt)
 
--- TODO: char: newline, space
 -- TODO: string: escape ""
 }
 
@@ -27,7 +27,9 @@ $decDigit = [0-9]
 $hexDigit = [0-9A-Fa-f]
 $alpha    = [a-zA-Z]
 $symbol   = [\!\$\%\&\|\*\+\-\/\:\<\=\>\?\@\^\_\~]
-$stringChar = $printable # \"
+$charesc = [abfnrtv\\\"\'\&]
+@escape  = \\ $charesc
+@stringChar = $printable # [\"\\] | @escape
 
 @integer    = \-? $decDigit+
 @binInteger = "#b" $binDigit+
@@ -41,7 +43,7 @@ $stringChar = $printable # \"
 @complex    = \-? @complexNum [\+\-] @complexNum "i"
 
 @character = "#\" $printable $alpha*
-@string    = \" $stringChar* \"
+@string    = \" @stringChar* \"
 @symbol    = [$alpha $symbol] [$alpha $symbol $decDigit]*
 
 tokens :-
@@ -80,6 +82,9 @@ tokens :-
 data Token a = Token { getPosition :: AlexPosn
                      , getToken    :: a
                      }
+
+defaultPos :: AlexPosn
+defaultPos = alexStartPos
 
 getLineNum :: Token a -> Int
 getLineNum (Token (AlexPn _ line _) _) = line
@@ -203,9 +208,6 @@ instance Error ScannerError where
 
 type ThrowsScannerError = Either ScannerError
 
--- TODO: Either monad (error)
--- chain conses using Applicative (if it's possible) (liftA or <$>), or:
--- errList >>= (\list -> return (1:list))
 scan :: String -> ThrowsScannerError [Token SchemeToken]
 scan str = go (alexStartPos, '\n', [], str)
   where go inp@(pos, _, _, str) =

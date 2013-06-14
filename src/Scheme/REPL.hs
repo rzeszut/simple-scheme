@@ -11,7 +11,7 @@ import Scheme.Primitives
 import Scheme.Primitives.IO (load)
 import Scheme.Scanner (scan)
 import System.IO
-import Scheme.Error (runIOThrows, liftThrows, liftScanner, liftParser)
+import Scheme.Error (runIOThrows, liftThrows, liftIOScanner, liftParser)
 import Scheme.Environment (bindVars, defineVar)
 
 flushStr :: String -> IO ()
@@ -19,7 +19,7 @@ flushStr str = putStr str >> hFlush stdout
 
 evalString :: SchemeEnvironment -> String -> IO String
 evalString env expr = runIOThrows $ liftM show $
-                      (liftScanner $ scan expr)
+                      (liftIOScanner $ scan expr)
                       >>= (\ast -> liftParser $ parse ast)
                       >>= eval env
 

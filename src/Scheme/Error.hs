@@ -7,6 +7,7 @@ module Scheme.Error (
   , liftThrows
   , runIOThrows
   , liftScanner
+  , liftIOScanner
   , liftParser
   , throwError
   , catchError
@@ -65,9 +66,13 @@ liftThrows (Right val) = return val
 runIOThrows :: (Show t) => IOThrowsError t String -> IO String
 runIOThrows action = runErrorT (trapError action) >>= return . extractValue
 
-liftScanner :: Either ScannerError t -> IOThrowsError a t
+liftScanner :: Either ScannerError t -> ThrowsError a t
 liftScanner (Left err)  = throwError $ Scanner err
 liftScanner (Right val) = return val
+
+liftIOScanner :: Either ScannerError t -> IOThrowsError a t
+liftIOScanner (Left err)  = throwError $ Scanner err
+liftIOScanner (Right val) = return val
 
 liftParser :: Either ParserError t -> IOThrowsError a t
 liftParser (Left err)  = throwError $ Parser err

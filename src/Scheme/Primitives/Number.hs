@@ -12,6 +12,12 @@ import Scheme.Error
 import Scheme.Data
 import Scheme.Primitives.Common
 import Scheme.Primitives.Equal (unpackEquals)
+import qualified Scheme.Scanner as S (scan,
+                                      Token(getToken),
+                                      SchemeToken(Integer,
+                                                  Rational,
+                                                  Float,
+                                                  Complex))
 
 numberPrimitives :: [(String, [SchemeValue] -> ThrowsSchemeError SchemeValue)]
 numberPrimitives = [ ("number?",   unaryFunction numberp)
@@ -61,6 +67,9 @@ numberPrimitives = [ ("number?",   unaryFunction numberp)
                    , ("imag-part",        imagPartProc)
                    , ("magnitude",        magnitudeProc)
                    , ("angle",            angleProc)
+
+                   , ("num->string", unaryThrowingFunction num2string)
+                   , ("string->num", unaryThrowingFunction string2num)
                    ]
 
 numberp (Integer  _) = Boolean True
@@ -131,6 +140,24 @@ realPartProc  = numberUnaryFunction unpackComplex realPart  (return . Float)
 imagPartProc  = numberUnaryFunction unpackComplex imagPart  (return . Float)
 magnitudeProc = numberUnaryFunction unpackComplex magnitude (return . Float)
 angleProc     = numberUnaryFunction unpackComplex phase     (return . Float)
+
+num2string :: SchemeValue -> ThrowsSchemeError SchemeValue
+num2string (Integer i)  = return . String $ show i
+num2string (Rational r) = return . String $ show r
+num2string (Float f)    = return . String $ show f
+num2string (Complex c)  = return . String $ show c
+num2string notNum       = throwError $ TypeMismatch "number" notNum
+
+string2num :: SchemeValue -> ThrowsSchemeError SchemeValue
+string2num (String str) = token >>= makeNumber
+  where
+    token = liftM (S.getToken . head) $ liftScanner $ S.scan str
+    makeNumber (S.Integer i)  = return $ Integer i
+    makeNumber (S.Rational r) = return $ Rational r
+    makeNumber (S.Float f)    = return $ Float f
+    makeNumber (S.Complex c)  = return $ Complex c
+    makeNumber   _            = throwError . Default $ concat ["Not a number: ", str]
+string2num notStr = throwError $ TypeMismatch "string" notStr
 
 -- helpers
 numberUnaryFunction unpacker function packer =

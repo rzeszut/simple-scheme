@@ -188,6 +188,20 @@
 (define (force promise)
   (promise))
 
+;; additional, haskell-like functions
+(define (id obj) obj)
+
+(define (flip func)
+  (lambda (arg1 arg2) (func arg2 arg1)))
+
+(define (curry func . args)
+  (lambda (arg)
+    (apply func (append args (list arg)))))
+
+(define (compose f g)
+  (lambda (arg)
+    (f (apply g arg))))
+
 ;; io
 (define (call-with-input-file filename proc)
   (let ((port (open-input-file filename))
@@ -195,17 +209,11 @@
     (close-input-port port)
     v))
 
-(define (call-with-input-file filename proc)
-  (let ((port (open-input-file filename))
-        (v (proc port)))
-    (close-input-port port)
-    v))
-
 (define (call-with-output-file filename proc)
-  (define port (open-output-file filename))
-  (define v (proc port))
-  (close-output-port port)
-  v)
+  (let ((port (open-output-file filename))
+        (v (proc port)))
+    (close-output-port port)
+    v))
 
 (define (newline . port)
   (if (null? port)
