@@ -68,8 +68,8 @@ numberPrimitives = [ ("number?",   unaryFunction numberp)
                    , ("magnitude",        magnitudeProc)
                    , ("angle",            angleProc)
 
-                   , ("num->string", unaryThrowingFunction num2string)
-                   , ("string->num", unaryThrowingFunction string2num)
+                   , ("number->string", unaryThrowingFunction num2string)
+                   , ("string->number", unaryThrowingFunction string2num)
                    ]
 
 numberp (Integer  _) = Boolean True
