@@ -7,7 +7,7 @@ module Scheme.Primitives.Number (numberPrimitives) where
 
 import Control.Monad
 import Data.Complex
-import Data.Ratio (Rational, numerator, denominator)
+import Data.Ratio (Rational, (%), numerator, denominator)
 import Scheme.Error
 import Scheme.Data
 import Scheme.Primitives.Common
@@ -35,7 +35,7 @@ numberPrimitives = [ ("number?",   unaryFunction numberp)
                    , ("__add",     numBinop $ num (+))
                    , ("__sub",     numBinop $ num (-))
                    , ("__mul",     numBinop $ num (*))
-                   , ("/",         integerBinop div)
+                   , ("/",         divide)
 
                    , ("modulo",    integerBinop mod)
                    , ("quotient",  integerBinop quot)
@@ -211,7 +211,41 @@ equalNum [arg1, arg2] = do
   return $ Boolean ret
 equalNum args         = throwError $ NumArgs 2 args
 
+
 -- bullshit starts here
+
+-- I don't even
+data DivNumber = forall a . (Num a, N a, Fractional a) => DivNumber a
+
+data DivUnpacker = forall a . (Num a, N a, Fractional a) => DivUnpacker (SchemeValue -> ThrowsSchemeError a)
+
+unpackDivide :: SchemeValue
+               -> SchemeValue
+               -> DivUnpacker
+               -> ThrowsSchemeError DivNumber
+unpackDivide arg1 arg2 (DivUnpacker unpacker) =
+  do unpacked1 <- unpacker arg1
+     unpacked2 <- unpacker arg2
+     return $ DivNumber $ unpacked1 / unpacked2
+  `catchError` (const . throwError $ Default "invalid number")
+
+divide :: [SchemeValue] -> ThrowsSchemeError SchemeValue
+divide [(Integer i), (Integer j)] = return $ if i `mod` j == 0 then Integer $ i `div` j
+                                             else Rational $ i % j
+divide [arg1, arg2] = do
+  ret <- liftM head $ sequence $ filterErrors $ map (unpackDivide arg1 arg2)
+         [ DivUnpacker unpackRational
+         , DivUnpacker unpackFloat
+         , DivUnpacker unpackComplex
+         ]
+  return $ case ret of { DivNumber n -> makeNumber n }
+  where
+    filterErrors = filter (\x -> case x of
+                              Left _  -> False
+                              Right _ -> True)
+divide args           = throwError $ NumArgs 2 args
+
+-- uhh, divide finished
 
 data Number = forall a . (Num a, N a) => Number a
 
@@ -235,8 +269,8 @@ unpackBinop f arg1 arg2 (NumUnpacker unpacker) =
      unpacked2 <- unpacker arg2
      return $ unpacked1 `f` unpacked2
   `catchError` (const . throwError $ Default "invalid number")
-  
- -- what the fuck is that
+
+-- what the fuck is that
 numBinop :: (forall a . (Num a, N a) => a -> a -> Number)
             -> [SchemeValue]
             -> ThrowsSchemeError SchemeValue
