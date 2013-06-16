@@ -25,6 +25,7 @@ primitiveBindings = nullEnvironment >>= (flip bindVars $ concat
                                          , (map (makeNativeFunc NativeFunction) vectorPrimitives)
                                          , (map (makeNativeFunc IONativeFunction) controlPrimitives)
                                          , (map (makeNativeFunc IONativeFunction) ioPrimitives)
+                                         , (map (makeNativeFunc IONativeFunction) vectorIoPrimitives)
                                          ])
   where
     makeNativeFunc constructor (var, fun) = (var, constructor fun)

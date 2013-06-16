@@ -29,37 +29,40 @@ evalDefinition env (FunDefinition name paramsList body) =
 
 evalExpression :: SchemeEnvironment -> Expression -> IOThrowsSchemeError SchemeValue
 evalExpression env (Ident name)     = getVar env name
-evalExpression env (Literal l)      = return $ evalLiteral l
+evalExpression env (Literal l)      = evalLiteral l
 evalExpression env (FunctionCall c) = evalCall env c
 evalExpression env (Lambda l)       = evalLambda env l
 evalExpression env (Special s)      = evalSpecial env s
 
-evalLiteral :: Literal -> SchemeValue
+evalLiteral :: Literal -> IOThrowsSchemeError SchemeValue
 evalLiteral (SelfEvaluating se) = evalSelfEvaluating se
   where
-    evalSelfEvaluating (LNumber num)  = evalNumber num
-    evalSelfEvaluating (LBoolean b)   = Boolean b
-    evalSelfEvaluating (LCharacter c) = Char c
-    evalSelfEvaluating (LString s)    = String s
+    evalSelfEvaluating (LNumber num)  = return $ evalNumber num
+    evalSelfEvaluating (LBoolean b)   = return $ Boolean b
+    evalSelfEvaluating (LCharacter c) = return $ Char c
+    evalSelfEvaluating (LString s)    = return $ String s
     evalSelfEvaluating (LVector v)    = evalVector v
 evalLiteral (Quotation (Quote datum)) = evalDatum datum
 
-evalDatum :: Datum -> SchemeValue
+evalDatum :: Datum -> IOThrowsSchemeError SchemeValue
 evalDatum (Simple datum) = evalSimpleDatum datum
   where
-    evalSimpleDatum (DNumber num)  = evalNumber num
-    evalSimpleDatum (DBoolean b)   = Boolean b
-    evalSimpleDatum (DCharacter c) = Char c
-    evalSimpleDatum (DString s)    = String s
-    evalSimpleDatum (DSymbol s)    = Symbol s
+    evalSimpleDatum (DNumber num)  = return $ evalNumber num
+    evalSimpleDatum (DBoolean b)   = return $ Boolean b
+    evalSimpleDatum (DCharacter c) = return $ Char c
+    evalSimpleDatum (DString s)    = return $ String s
+    evalSimpleDatum (DSymbol s)    = return $ Symbol s
 evalDatum (ListDatum list) = evalList list
   where
-    evalList (DList list)            = List (map evalDatum list)
-    evalList (DDottedList list last) = DottedList (map evalDatum list) (evalDatum last)
+    evalList (DList list)            = (sequence $ map evalDatum list) >>= (return . List)
+    evalList (DDottedList list last) = do
+      car <- sequence $ map evalDatum list
+      cdr <- evalDatum last
+      return $ DottedList car cdr
 evalDatum (VectorDatum vec) = evalVector vec
 
-evalVector :: Vector -> SchemeValue
-evalVector (DVector values) = Vector $ listArray (0, length values - 1) $ map evalDatum values
+evalVector :: Vector -> IOThrowsSchemeError SchemeValue
+evalVector (DVector values) = (sequence $ map evalDatum values) >>= makeVector
 
 evalNumber :: Number -> SchemeValue
 evalNumber (NInteger int) = Integer int
@@ -148,7 +151,7 @@ evalQQ :: SchemeEnvironment -> QuasiQuotation -> IOThrowsSchemeError SchemeValue
 evalQQ env (QQuote template) = evalTemplate env template
 
 evalTemplate :: SchemeEnvironment -> Template -> IOThrowsSchemeError SchemeValue
-evalTemplate env (SimpleDatum datum)   = return $ evalDatum (Simple datum)
+evalTemplate env (SimpleDatum datum)   = evalDatum (Simple datum)
 evalTemplate env (ListTemplate list)   = evalListTemplate env list
 evalTemplate env (VectorTemplate vec)  = evalVectorTemplate env vec
 evalTemplate env (QuotedTemplate temp) = do
@@ -169,7 +172,7 @@ evalVectorTemplate :: SchemeEnvironment -> VectorTemplate -> IOThrowsSchemeError
 evalVectorTemplate env (VectorTmp ts) = do
   evaled <- mapM (evalTemplateOrSplice env) ts
   let lst = concat evaled
-  return . Vector $ listArray (0, length lst - 1) lst
+  makeVector lst
 
 evalTemplateOrSplice :: SchemeEnvironment -> TemplateOrSplice -> IOThrowsSchemeError [SchemeValue]
 evalTemplateOrSplice env (Template t) = do

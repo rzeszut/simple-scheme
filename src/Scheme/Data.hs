@@ -9,15 +9,20 @@ module Scheme.Data (
   , IOThrowsSchemeError(..)
     -- ** Scheme Environment
   , SchemeEnvironment(..)
+    -- * Functions
+  , makeVector
   ) where
 
-import Data.Array (Array, elems)
+import Control.Monad.Trans (liftIO)
+import Data.Array (Array, elems, listArray)
+import Data.IORef (IORef(..), newIORef, readIORef)
 import Data.Ratio (Rational, numerator, denominator)
 import Data.Complex (Complex((:+)))
 import Scheme.Error (LangError(..), ThrowsError, IOThrowsError)
 import Scheme.Environment (Environment)
 import Scheme.Parser (Command(..))
 import System.IO (Handle)
+import System.IO.Unsafe (unsafePerformIO) -- needed for Show instance
 
 -- | Scheme value datatype
 data SchemeValue = List [SchemeValue]
@@ -30,7 +35,7 @@ data SchemeValue = List [SchemeValue]
                  | Boolean Bool
                  | Char Char
                  | String String
-                 | Vector (Array Int SchemeValue)
+                 | Vector (Array Int (IORef SchemeValue))
                  | NativeFunction ([SchemeValue] -> ThrowsSchemeError SchemeValue)
                  | IONativeFunction (SchemeEnvironment -> [SchemeValue] -> IOThrowsSchemeError SchemeValue)
                  | Function { params  :: [String]
@@ -55,7 +60,7 @@ showVal (Char      c)        = "#\\" ++ [c]
 showVal (String    str)      = concat ["\"", str, "\""]
 showVal (Vector    a)        = concat ["#(", contents, ")"]
   where
-    contents = unwords $ map showVal $ elems a
+    contents = unwords $ map (show . unsafePerformIO . readIORef) $ elems a
 
 showVal (NativeFunction _)   = "<native function>"
 showVal (IONativeFunction _) = "<native function>"
@@ -87,3 +92,8 @@ type ThrowsSchemeError   = ThrowsError SchemeValue
 type IOThrowsSchemeError = IOThrowsError SchemeValue
 
 type SchemeEnvironment   = Environment SchemeValue
+
+makeVector :: [SchemeValue] -> IOThrowsSchemeError SchemeValue
+makeVector list = do
+  vals <- liftIO $ sequence $ map newIORef list
+  return . Vector $ listArray (0, length vals - 1) vals

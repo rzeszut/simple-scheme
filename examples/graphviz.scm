@@ -53,3 +53,5 @@
     (edges->dot edges port)
     (write-string "}" port)
     (newline port)))
+
+(graph->dot *nodes* *edges*)

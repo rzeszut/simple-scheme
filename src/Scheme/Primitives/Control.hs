@@ -11,7 +11,7 @@ controlPrimitives :: [(String, SchemeEnvironment -> [SchemeValue] -> IOThrowsSch
 controlPrimitives = [ ("apply",      applyProc)
                     , ("error",      \_ args -> liftThrows $ unaryThrowingFunction errorProc args)
                     , ("procedure?", \_ args -> liftThrows $ unaryFunction procedurep args)
-                    , ("bound?",   boundp)
+                    , ("bound?",     boundp)
                     ]
 
 applyProc :: SchemeEnvironment -> [SchemeValue] -> IOThrowsSchemeError SchemeValue

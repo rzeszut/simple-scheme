@@ -123,6 +123,20 @@
 (define (string . args)
   (apply list->string (list args)))
 
+;; vectors
+(define (vector . objs)
+  (list->vector objs))
+
+(define (vector-fill! vector fill)
+  (define (iterate from to fun)
+    (if (not (= from to))
+        (let ((v (fun from)))
+          (cons v (iterate (+ from 1) to fun)))
+        '()))
+  (iterate 0 (vector-length vector) (lambda (i)
+                                      (vector-set! vector i fill)))
+  vector)
+
 ;; numbers
 (define (+ . lst)
   (foldl __add 0 lst))
