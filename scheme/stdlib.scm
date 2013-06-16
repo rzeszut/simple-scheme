@@ -147,14 +147,8 @@
         ((= l 1) (__sub 0 (car lst)))
         (else (foldl __sub (car lst) (cdr lst)))))
 
-(define (- . lst)
-  (let ((l (length lst)))
-    (cond ((= l 0) (error "Invalid number of arguments."))
-        ((= l 1) (__sub 0 (car lst)))
-        (else (foldl __sub (car lst) (cdr lst))))))
-
 (define (* . lst)
-  (foldl __sub 0 lst))
+  (foldl __mul 1 lst))
 
 (define (zero? num) (= 0 num))
 (define (positive? num) (> num 0))

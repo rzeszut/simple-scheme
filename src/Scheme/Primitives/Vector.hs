@@ -26,7 +26,7 @@ vectorp (Vector _) = Boolean True
 vectorp _          = Boolean False
 
 vectorLength :: SchemeValue -> SchemeValue
-vectorLength (Vector v) = let (_, l) = bounds v in Integer $ toInteger l
+vectorLength (Vector v) = let (_, l) = bounds v in Integer $ toInteger (l + 1)
 
 makeVectorProc :: [SchemeValue] -> IOThrowsSchemeError SchemeValue
 makeVectorProc [(Integer k)]       = makeVectorProc [(Integer k), (Boolean False)]

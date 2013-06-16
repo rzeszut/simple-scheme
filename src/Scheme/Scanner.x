@@ -172,7 +172,6 @@ readString = escapeString . init . tail
     codes           = ['"',  'n',  'r',  't',  'b',  'f',  '\\']
     replacements    = ['\"', '\n', '\r', '\t', '\b', '\f', '\\']
 
-
 readInteger :: String -> Integer
 readInteger = read
 
