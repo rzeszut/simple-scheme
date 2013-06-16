@@ -361,7 +361,7 @@ data ParserError = ParserError (S.Token S.SchemeToken)
                  | Default String
 
 showError :: ParserError -> String
-showError (ParserError token) = concat [ "parse error at "
+showError (ParserError token) = concat [ "Parser error at "
                                        , show $ S.getLineNum token
                                        , " line, "
                                        , show $ S.getColumnNum token

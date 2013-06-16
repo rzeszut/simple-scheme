@@ -16,7 +16,6 @@ import Data.Ratio (Rational, (%), numerator, denominator)
 import Data.List.Split (split, dropInitBlank, keepDelimsL, oneOf)
 import Numeric (readOct, readHex, readInt)
 
--- TODO: string: escape ""
 }
 
 %wrapper "posn"
@@ -27,9 +26,7 @@ $decDigit = [0-9]
 $hexDigit = [0-9A-Fa-f]
 $alpha    = [a-zA-Z]
 $symbol   = [\!\$\%\&\|\*\+\-\/\:\<\=\>\?\@\^\_\~]
-$charesc = [abfnrtv\\\"\'\&]
-@escape  = \\ $charesc
-@stringChar = $printable # [\"\\] | @escape
+$charesc  = [abfnrtv\\\"\'\&]
 
 @integer    = \-? $decDigit+
 @binInteger = "#b" $binDigit+
@@ -42,9 +39,11 @@ $charesc = [abfnrtv\\\"\'\&]
 @complexNum = $decDigit+ (\. $decDigit+ ("e" @integer)?)?
 @complex    = \-? @complexNum [\+\-] @complexNum "i"
 
-@character = "#\" $printable $alpha*
-@string    = \" @stringChar* \"
-@symbol    = [$alpha $symbol] [$alpha $symbol $decDigit]*
+@character  = "#\" $printable $alpha*
+@escape     = \\ $charesc
+@stringChar = $printable # [\"\\] | @escape
+@string     = \" @stringChar* \"
+@symbol     = [$alpha $symbol] [$alpha $symbol $decDigit]*
 
 tokens :-
   
@@ -78,7 +77,7 @@ tokens :-
   @symbol    { \p s -> Token p $ Symbol s }
 
 {
-
+-- "
 data Token a = Token { getPosition :: AlexPosn
                      , getToken    :: a
                      }
@@ -118,7 +117,39 @@ data SchemeToken = LeftParen
                  | Character Char
                  | String String
                  | Symbol String
-                 deriving (Eq, Show)
+                 deriving (Eq)
+
+showSchemeToken :: SchemeToken -> String
+showSchemeToken LeftParen            = "("
+showSchemeToken RightParen           = ")"
+showSchemeToken VectorBegin          = "#("
+showSchemeToken Dot                  = "."
+showSchemeToken Quote                = "'"
+showSchemeToken QuasiQuote           = "`"
+showSchemeToken UnQuote              = ","
+showSchemeToken UnQuoteSplicing      = ",@"
+showSchemeToken (Integer i)          = show i
+showSchemeToken (Rational r)         = concat [ show $ numerator r
+                                              , "/"
+                                              , show $ denominator r
+                                              ]
+showSchemeToken (Float f)            = show f
+showSchemeToken (Complex (re :+ im)) = concat [ show re
+                                              , if im < 0 then "" else "+"
+                                              , show im
+                                              , "i"
+                                              ]
+showSchemeToken (Boolean True)       = "#t"
+showSchemeToken (Boolean False)      = "#f"
+showSchemeToken (Character c)        = "#\\" ++ [c]
+showSchemeToken (String s)           = concat [ "\""
+                                              , s
+                                              , "\""
+                                              ]
+showSchemeToken (Symbol s)           = s
+
+instance Show SchemeToken where
+  show = showSchemeToken
 
 readCharacter :: String -> Char
 readCharacter str = toCharacter $ drop 2 str
@@ -180,17 +211,11 @@ readComplex str = re :+ im
     re              = toFloat restr
     im              = toFloat $ init imstr
 
--- test main function
---main :: IO ()
---main = do
---  contents <- getContents
---  putStrLn . unlines . map show $ alexScanTokens contents
-
 data ScannerError = ScannerError Int Int String
                   | Default String
 
 showError :: ScannerError -> String
-showError (ScannerError line col str) = concat [ "lexical error at "
+showError (ScannerError line col str) = concat [ "Lexical error at "
                                                , (show line)
                                                , " line, "
                                                , (show col)
@@ -213,7 +238,7 @@ scan str = go (alexStartPos, '\n', [], str)
   where go inp@(pos, _, _, str) =
           case alexScan inp 0 of
             AlexEOF -> return []
-            AlexError ((AlexPn _ line col), _, _, str) -> throwError $ ScannerError line col str
+            AlexError ((AlexPn _ line col), c, _, str) -> throwError $ ScannerError line col (c:str)
             AlexSkip  inp' len     -> go inp'
             AlexToken inp' len act -> (go inp') >>= \list ->
               return $ act pos (take len str) : list
